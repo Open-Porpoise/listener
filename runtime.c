@@ -69,6 +69,7 @@
 #include <rte_ip.h>
 #include <rte_tcp.h>
 #include <rte_lpm.h>
+#include <rte_timer.h>
 #include "utils.h"
 #include "core.h"
 
@@ -478,7 +479,6 @@ static void app_lcore_main_loop_io(void) {
 static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
 		uint32_t bsz_rd) {
 	uint32_t i, j;
-
 	for (i = 0; i < lp->n_rings_in; i ++) {
 		struct rte_ring *ring_in = lp->rings_in[i];
 		int ret;
@@ -613,9 +613,17 @@ static void app_lcore_main_loop_worker(void) {
 	uint64_t i = 0;
 
 	uint32_t bsz_rd = app.burst_size_worker_read;
+	uint64_t prev_tsc = 0, cur_tsc, diff_tsc;
 	//uint32_t bsz_wr = app.burst_size_worker_write;
 
 	for ( ; ; ) {
+		cur_tsc = rte_rdtsc();
+		diff_tsc = cur_tsc - prev_tsc;
+		if (diff_tsc > TIMER_RESOLUTION_CYCLES) {
+			rte_timer_manage();
+			prev_tsc = cur_tsc;
+		}
+
 		if (APP_LCORE_WORKER_FLUSH && (unlikely(i == APP_LCORE_WORKER_FLUSH))) {
 			app_lcore_worker_flush(lp);
 			i = 0;

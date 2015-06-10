@@ -1,7 +1,7 @@
 #ifndef _MAIN_H_
 #define _MAIN_H_
 
-
+#include <rte_timer.h>
 #include "geolocation.h"
 
 
@@ -17,6 +17,8 @@
 #ifndef APP_CONN_TAB_SIZE
 #define APP_CONN_TAB_SIZE (1<<24)
 #endif
+
+#define TIMER_RESOLUTION_CYCLES 20000000ULL /* around 10ms at 2 Ghz */
 
 /* Logical cores */
 #ifndef APP_MAX_SOCKETS
@@ -294,6 +296,7 @@ struct app_lcore_params_worker {
 	//struct list_head *app_conn_tab;
 	uint8_t *app_conn_tab;
 	uint32_t app_conn_count;
+	struct rte_timer app_timer;
 };
 
 struct app_lcore_params {

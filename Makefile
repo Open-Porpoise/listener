@@ -47,7 +47,6 @@ SRCS-y := main.c config.c init.c runtime.c utils.c core.c geolocation.c radix_tr
 CFLAGS += -O3 -g 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS_config.o := -D_GNU_SOURCE
-CFLAGS_geolocation.o += -Wno-unused-parameter
 
 # workaround for a gcc bug with noreturn attribute
 # http://gcc.gnu.org/bugzilla/show_bug.cgi?id=12603

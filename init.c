@@ -70,6 +70,7 @@
 #include <rte_ip.h>
 #include <rte_tcp.h>
 #include <rte_lpm.h>
+#include <rte_timer.h>
 
 #include "main.h"
 
@@ -528,6 +529,36 @@ static void app_init_conn_tab(void){
 	}
 }
 
+/* timer1 callback */
+static void
+app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
+	  __attribute__((unused)) void *arg)
+{
+	unsigned lcore_id = rte_lcore_id();
+	struct app_lcore_params_worker *lp_worker = (struct app_lcore_params_worker *)arg;
+
+	printf("%s() on lcore %u %lx\n", __func__, lcore_id, (uintptr_t)lp_worker);
+
+}
+
+static void app_init_timer(void){
+	unsigned lcore;
+	uint64_t hz;
+	int ret;
+
+	hz = rte_get_timer_hz();
+	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
+		struct app_lcore_params_worker *lp_worker = &app.lcore_params[lcore].worker;
+		rte_timer_init(&lp_worker->app_timer);
+
+		if (app.lcore_params[lcore].type != e_APP_LCORE_WORKER) {
+			continue;
+		}
+		ret = rte_timer_reset(&lp_worker->app_timer, hz*60, PERIODICAL, lcore, app_timer_cb, lp_worker);
+		printf("ret_timer_reset lcore:%d ret:%d\n", lcore, ret);
+	}
+}
+
 void
 app_init(void)
 {
@@ -539,6 +570,7 @@ app_init(void)
 	app_init_nics();
 	//app_init_protocol();
 	app_init_conn_tab();
+	app_init_timer();
 	printf("Initialization completed.\n");
 }
 

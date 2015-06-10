@@ -110,7 +110,8 @@ static uintptr_t get_key(ips_t *ips, struct avl_tree *tree, char *key){
 	}
 }
 
-static int avl_strcmp(const void *k1, const void *k2, void *ptr){
+static int avl_strcmp(const void *k1, const void *k2,
+		__attribute__((unused))void *ptr){
 	return strcmp(k1, k2);
 }
 
