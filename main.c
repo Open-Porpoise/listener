@@ -78,6 +78,7 @@ main(int argc, char **argv)
 {
 	uint32_t lcore;
 	int ret;
+	char *prog = argv[0];
 
 	/* Init EAL */
 	ret = rte_eal_init(argc, argv);
@@ -89,7 +90,7 @@ main(int argc, char **argv)
 	/* Parse application arguments (after the EAL ones) */
 	ret = app_parse_args(argc, argv);
 	if (ret < 0) {
-		app_print_usage();
+		app_print_usage(prog);
 		return -1;
 	}
 

@@ -69,6 +69,8 @@
 #include <rte_ip.h>
 #include <rte_tcp.h>
 #include <rte_lpm.h>
+#include "utils.h"
+#include "core.h"
 
 #include "main.h"
 
@@ -99,6 +101,8 @@
 #ifndef APP_IO_TX_PREFETCH_ENABLE
 #define APP_IO_TX_PREFETCH_ENABLE    1
 #endif
+
+#define PREFETCH_OFFSET 3
 
 #if APP_IO_RX_PREFETCH_ENABLE
 #define APP_IO_RX_PREFETCH0(p)       rte_prefetch0(p)
@@ -180,11 +184,9 @@ app_lcore_io_rx(
 	struct app_lcore_params_io *lp,
 	uint32_t n_workers,
 	uint32_t bsz_rd,
-	uint32_t bsz_wr,
-	uint8_t pos_lb)
+	uint32_t bsz_wr)
 {
 	struct rte_mbuf *mbuf_1_0, *mbuf_1_1, *mbuf_2_0, *mbuf_2_1;
-	uint8_t *data_1_0, *data_1_1 = NULL;
 	uint32_t i;
 
 	for (i = 0; i < lp->rx.n_nic_queues; i ++) {
@@ -232,63 +234,52 @@ app_lcore_io_rx(
 
 		mbuf_1_0 = lp->rx.mbuf_in.array[0];
 		mbuf_1_1 = lp->rx.mbuf_in.array[1];
-		data_1_0 = rte_pktmbuf_mtod(mbuf_1_0, uint8_t *);
-		if (likely(n_mbufs > 1)) {
-			data_1_1 = rte_pktmbuf_mtod(mbuf_1_1, uint8_t *);
-		}
-
 		mbuf_2_0 = lp->rx.mbuf_in.array[2];
 		mbuf_2_1 = lp->rx.mbuf_in.array[3];
-		APP_IO_RX_PREFETCH0(mbuf_2_0);
-		APP_IO_RX_PREFETCH0(mbuf_2_1);
+
+		rte_prefetch0(mbuf_1_0);
+		rte_prefetch0(mbuf_1_1);
+		rte_prefetch0(mbuf_2_0);
+		rte_prefetch0(mbuf_2_1);
+		rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_0, void *));
+		rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_1, void *));
+		rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_0, void *));
+		rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_1, void *));
 
 		for (j = 0; j + 3 < n_mbufs; j += 2) {
 			struct rte_mbuf *mbuf_0_0, *mbuf_0_1;
-			uint8_t *data_0_0, *data_0_1;
-			uint32_t worker_0, worker_1;
 
 			mbuf_0_0 = mbuf_1_0;
 			mbuf_0_1 = mbuf_1_1;
-			data_0_0 = data_1_0;
-			data_0_1 = data_1_1;
-
 			mbuf_1_0 = mbuf_2_0;
 			mbuf_1_1 = mbuf_2_1;
-			data_1_0 = rte_pktmbuf_mtod(mbuf_2_0, uint8_t *);
-			data_1_1 = rte_pktmbuf_mtod(mbuf_2_1, uint8_t *);
-			APP_IO_RX_PREFETCH0(data_1_0);
-			APP_IO_RX_PREFETCH0(data_1_1);
-
 			mbuf_2_0 = lp->rx.mbuf_in.array[j+4];
 			mbuf_2_1 = lp->rx.mbuf_in.array[j+5];
-			APP_IO_RX_PREFETCH0(mbuf_2_0);
-			APP_IO_RX_PREFETCH0(mbuf_2_1);
 
-			worker_0 = data_0_0[pos_lb] & (n_workers - 1);
-			worker_1 = data_0_1[pos_lb] & (n_workers - 1);
+			rte_prefetch0(mbuf_2_0);
+			rte_prefetch0(mbuf_2_1);
+			rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_0, void *));
+			rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_1, void *));
 
-			app_lcore_io_rx_buffer_to_send(lp, worker_0, mbuf_0_0, bsz_wr);
-			app_lcore_io_rx_buffer_to_send(lp, worker_1, mbuf_0_1, bsz_wr);
+			app_lcore_io_rx_buffer_to_send(lp, 
+					xmit_l34_hash32(mbuf_0_0) & (n_workers - 1), mbuf_0_0, bsz_wr);
+			app_lcore_io_rx_buffer_to_send(lp, 
+					xmit_l34_hash32(mbuf_0_1) & (n_workers - 1), mbuf_0_1, bsz_wr);
 		}
 
 		/* Handle the last 1, 2 (when n_mbufs is even) or 3 (when n_mbufs is odd) packets  */
 		for ( ; j < n_mbufs; j += 1) {
 			struct rte_mbuf *mbuf;
-			uint8_t *data;
-			uint32_t worker;
 
 			mbuf = mbuf_1_0;
 			mbuf_1_0 = mbuf_1_1;
 			mbuf_1_1 = mbuf_2_0;
 			mbuf_2_0 = mbuf_2_1;
 
-			data = rte_pktmbuf_mtod(mbuf, uint8_t *);
-
-			APP_IO_RX_PREFETCH0(mbuf_1_0);
-
-			worker = data[pos_lb] & (n_workers - 1);
-
-			app_lcore_io_rx_buffer_to_send(lp, worker, mbuf, bsz_wr);
+			rte_prefetch0(mbuf_1_0);
+			rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_0, void *));
+			app_lcore_io_rx_buffer_to_send(lp, 
+					xmit_l34_hash32(mbuf) & (n_workers - 1), mbuf, bsz_wr);
 		}
 	}
 }
@@ -414,9 +405,8 @@ app_lcore_io_tx(
 	}
 }
 
-static inline void
-app_lcore_io_tx_flush(struct app_lcore_params_io *lp)
-{
+
+static inline void app_lcore_io_tx_flush(struct app_lcore_params_io *lp) {
 	uint8_t port;
 
 	for (port = 0; port < lp->tx.n_nic_ports; port ++) {
@@ -447,9 +437,7 @@ app_lcore_io_tx_flush(struct app_lcore_params_io *lp)
 	}
 }
 
-static void
-app_lcore_main_loop_io(void)
-{
+static void app_lcore_main_loop_io(void) {
 	uint32_t lcore = rte_lcore_id();
 	struct app_lcore_params_io *lp = &app.lcore_params[lcore].io;
 	uint32_t n_workers = app_get_lcores_worker();
@@ -460,7 +448,7 @@ app_lcore_main_loop_io(void)
 	uint32_t bsz_tx_rd = app.burst_size_io_tx_read;
 	uint32_t bsz_tx_wr = app.burst_size_io_tx_write;
 
-	uint8_t pos_lb = app.pos_lb;
+	//uint8_t pos_lb = app.pos_lb;
 
 	for ( ; ; ) {
 		if (APP_LCORE_IO_FLUSH && (unlikely(i == APP_LCORE_IO_FLUSH))) {
@@ -476,7 +464,7 @@ app_lcore_main_loop_io(void)
 		}
 
 		if (likely(lp->rx.n_nic_queues > 0)) {
-			app_lcore_io_rx(lp, n_workers, bsz_rx_rd, bsz_rx_wr, pos_lb);
+			app_lcore_io_rx(lp, n_workers, bsz_rx_rd, bsz_rx_wr);
 		}
 
 		if (likely(lp->tx.n_nic_ports > 0)) {
@@ -487,17 +475,12 @@ app_lcore_main_loop_io(void)
 	}
 }
 
-static inline void
-app_lcore_worker(
-	struct app_lcore_params_worker *lp,
-	uint32_t bsz_rd,
-	uint32_t bsz_wr)
-{
-	uint32_t i;
+static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
+		uint32_t bsz_rd) {
+	uint32_t i, j;
 
 	for (i = 0; i < lp->n_rings_in; i ++) {
 		struct rte_ring *ring_in = lp->rings_in[i];
-		uint32_t j;
 		int ret;
 
 		ret = rte_ring_sc_dequeue_bulk(
@@ -522,10 +505,10 @@ app_lcore_worker(
 		APP_WORKER_PREFETCH0(lp->mbuf_in.array[1]);
 
 		for (j = 0; j < bsz_rd; j ++) {
-			struct rte_mbuf *pkt;
-			struct ipv4_hdr *ipv4_hdr;
-			uint32_t ipv4_dst, pos;
-			uint8_t port;
+			//struct rte_mbuf *pkt;
+			//struct ipv4_hdr *ipv4_hdr;
+			//uint32_t ipv4_dst, pos;
+			//uint8_t port;
 
 			if (likely(j < bsz_rd - 1)) {
 				APP_WORKER_PREFETCH1(rte_pktmbuf_mtod(lp->mbuf_in.array[j+1], unsigned char *));
@@ -534,6 +517,11 @@ app_lcore_worker(
 				APP_WORKER_PREFETCH0(lp->mbuf_in.array[j+2]);
 			}
 
+			/* todo: deal this pkt */
+			deal_pkt(lp, lp->mbuf_in.array[j]);
+			continue;
+
+#if 0
 			pkt = lp->mbuf_in.array[j];
 			ipv4_hdr = (struct ipv4_hdr *)(rte_pktmbuf_mtod(pkt, unsigned char *) + sizeof(struct ether_hdr));
 			ipv4_dst = rte_be_to_cpu_32(ipv4_hdr->dst_addr);
@@ -580,13 +568,12 @@ app_lcore_worker(
 
 			lp->mbuf_out[port].n_mbufs = 0;
 			lp->mbuf_out_flush[port] = 0;
+#endif
 		}
 	}
 }
 
-static inline void
-app_lcore_worker_flush(struct app_lcore_params_worker *lp)
-{
+static inline void app_lcore_worker_flush(struct app_lcore_params_worker *lp) {
 	uint32_t port;
 
 	for (port = 0; port < APP_MAX_NIC_PORTS; port ++) {
@@ -620,14 +607,13 @@ app_lcore_worker_flush(struct app_lcore_params_worker *lp)
 	}
 }
 
-static void
-app_lcore_main_loop_worker(void) {
+static void app_lcore_main_loop_worker(void) {
 	uint32_t lcore = rte_lcore_id();
 	struct app_lcore_params_worker *lp = &app.lcore_params[lcore].worker;
 	uint64_t i = 0;
 
 	uint32_t bsz_rd = app.burst_size_worker_read;
-	uint32_t bsz_wr = app.burst_size_worker_write;
+	//uint32_t bsz_wr = app.burst_size_worker_write;
 
 	for ( ; ; ) {
 		if (APP_LCORE_WORKER_FLUSH && (unlikely(i == APP_LCORE_WORKER_FLUSH))) {
@@ -635,15 +621,13 @@ app_lcore_main_loop_worker(void) {
 			i = 0;
 		}
 
-		app_lcore_worker(lp, bsz_rd, bsz_wr);
+		app_lcore_worker(lp, bsz_rd);
 
 		i ++;
 	}
 }
 
-int
-app_lcore_main_loop(__attribute__((unused)) void *arg)
-{
+int app_lcore_main_loop(__attribute__((unused)) void *arg) {
 	struct app_lcore_params *lp;
 	unsigned lcore;
 

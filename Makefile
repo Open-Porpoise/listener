@@ -42,11 +42,12 @@ include $(RTE_SDK)/mk/rte.vars.mk
 APP = listener
 
 # all source are stored in SRCS-y
-SRCS-y := main.c config.c init.c runtime.c
+SRCS-y := main.c config.c init.c runtime.c utils.c core.c geolocation.c radix_tree.c avl.c
 
-CFLAGS += -O3 -g
+CFLAGS += -O3 -g 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS_config.o := -D_GNU_SOURCE
+CFLAGS_geolocation.o += -Wno-unused-parameter
 
 # workaround for a gcc bug with noreturn attribute
 # http://gcc.gnu.org/bugzilla/show_bug.cgi?id=12603

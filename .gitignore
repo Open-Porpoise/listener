@@ -2,3 +2,8 @@ examples
 lib
 G*
 *.swp
+libnids/
+build/
+fnat
+examples
+tmp/

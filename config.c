@@ -77,7 +77,7 @@ struct app_params app;
 
 static const char usage[] =
 "                                                                               \n"
-"    load_balancer <EAL PARAMS> -- <APP PARAMS>                                 \n"
+"    %s <EAL PARAMS> -- <APP PARAMS>                                 \n"
 "                                                                               \n"
 "Application manadatory parameters:                                             \n"
 "    --rx \"(PORT, QUEUE, LCORE), ...\" : List of NIC RX ports and queues       \n"
@@ -111,26 +111,24 @@ static const char usage[] =
 "           E = I/O TX lcore read burst size from input SW rings (default value \n"
 "               is %u)                                                          \n"
 "           F = I/O TX lcore write burst size to NIC TX (default value is %u)   \n"
-"    --pos-lb POS : Position of the 1-byte field within the input packet used by\n"
-"           the I/O RX lcores to identify the worker lcore for the current      \n"
-"           packet (default value is %u)                                        \n";
+"    --ip-list FILENAME : idc ip list filename, format:                         \n" 
+"           192.168.1.1                                                         \n" 
+"           192.168.1.0/24                                                      \n";
 
-void
-app_print_usage(void)
-{
+void app_print_usage(char *prog) {
 	printf(usage,
-		APP_DEFAULT_NIC_RX_RING_SIZE,
-		APP_DEFAULT_RING_RX_SIZE,
-		APP_DEFAULT_RING_TX_SIZE,
-		APP_DEFAULT_NIC_TX_RING_SIZE,
-		APP_DEFAULT_BURST_SIZE_IO_RX_READ,
-		APP_DEFAULT_BURST_SIZE_IO_RX_WRITE,
-		APP_DEFAULT_BURST_SIZE_WORKER_READ,
-		APP_DEFAULT_BURST_SIZE_WORKER_WRITE,
-		APP_DEFAULT_BURST_SIZE_IO_TX_READ,
-		APP_DEFAULT_BURST_SIZE_IO_TX_WRITE,
-		APP_DEFAULT_IO_RX_LB_POS
-	);
+			prog,
+			APP_DEFAULT_NIC_RX_RING_SIZE,
+			APP_DEFAULT_RING_RX_SIZE,
+			APP_DEFAULT_RING_TX_SIZE,
+			APP_DEFAULT_NIC_TX_RING_SIZE,
+			APP_DEFAULT_BURST_SIZE_IO_RX_READ,
+			APP_DEFAULT_BURST_SIZE_IO_RX_WRITE,
+			APP_DEFAULT_BURST_SIZE_WORKER_READ,
+			APP_DEFAULT_BURST_SIZE_WORKER_WRITE,
+			APP_DEFAULT_BURST_SIZE_IO_TX_READ,
+			APP_DEFAULT_BURST_SIZE_IO_TX_WRITE
+		  );
 }
 
 #ifndef APP_ARG_RX_MAX_CHARS
@@ -141,13 +139,11 @@ app_print_usage(void)
 #define APP_ARG_RX_MAX_TUPLES    128
 #endif
 
-static int
-str_to_unsigned_array(
-	const char *s, size_t sbuflen,
-	char separator,
-	unsigned num_vals,
-	unsigned *vals)
-{
+static int str_to_unsigned_array(
+		const char *s, size_t sbuflen,
+		char separator,
+		unsigned num_vals,
+		unsigned *vals) {
 	char str[sbuflen+1];
 	char *splits[num_vals];
 	char *endptr = NULL;
@@ -167,13 +163,11 @@ str_to_unsigned_array(
 	return num_splits;
 }
 
-static int
-str_to_unsigned_vals(
-	const char *s,
-	size_t sbuflen,
-	char separator,
-	unsigned num_vals, ...)
-{
+static int str_to_unsigned_vals(
+		const char *s,
+		size_t sbuflen,
+		char separator,
+		unsigned num_vals, ...) {
 	unsigned i, vals[num_vals];
 	va_list ap;
 
@@ -188,7 +182,7 @@ str_to_unsigned_vals(
 	return num_vals;
 }
 
-static int
+	static int
 parse_arg_rx(const char *arg)
 {
 	const char *p0 = arg, *p = arg;
@@ -205,7 +199,7 @@ parse_arg_rx(const char *arg)
 
 		p0 = strchr(p++, ')');
 		if ((p0 == NULL) ||
-		    (str_to_unsigned_vals(p, p0 - p, ',', 3, &port, &queue, &lcore) !=  3)) {
+				(str_to_unsigned_vals(p, p0 - p, ',', 3, &port, &queue, &lcore) !=  3)) {
 			return -2;
 		}
 
@@ -233,7 +227,7 @@ parse_arg_rx(const char *arg)
 		lp->type = e_APP_LCORE_IO;
 		for (i = 0; i < lp->io.rx.n_nic_queues; i ++) {
 			if ((lp->io.rx.nic_queues[i].port == port) &&
-			    (lp->io.rx.nic_queues[i].queue == queue)) {
+					(lp->io.rx.nic_queues[i].queue == queue)) {
 				return -8;
 			}
 		}
@@ -265,8 +259,7 @@ parse_arg_rx(const char *arg)
 #define APP_ARG_TX_MAX_TUPLES    128
 #endif
 
-static int
-parse_arg_tx(const char *arg)
+static int parse_arg_tx(const char *arg)
 {
 	const char *p0 = arg, *p = arg;
 	uint32_t n_tuples;
@@ -282,7 +275,7 @@ parse_arg_tx(const char *arg)
 
 		p0 = strchr(p++, ')');
 		if ((p0 == NULL) ||
-		    (str_to_unsigned_vals(p, p0 - p, ',', 2, &port, &lcore) !=  2)) {
+				(str_to_unsigned_vals(p, p0 - p, ',', 2, &port, &lcore) !=  2)) {
 			return -2;
 		}
 
@@ -318,7 +311,6 @@ parse_arg_tx(const char *arg)
 		}
 		lp->io.tx.nic_ports[lp->io.tx.n_nic_ports] = (uint8_t) port;
 		lp->io.tx.n_nic_ports ++;
-
 		n_tuples ++;
 		if (n_tuples > APP_ARG_TX_MAX_TUPLES) {
 			return -10;
@@ -340,9 +332,7 @@ parse_arg_tx(const char *arg)
 #define APP_ARG_W_MAX_TUPLES    APP_MAX_WORKER_LCORES
 #endif
 
-static int
-parse_arg_w(const char *arg)
-{
+static int parse_arg_w(const char *arg) {
 	const char *p = arg;
 	uint32_t n_tuples;
 
@@ -402,9 +392,7 @@ parse_arg_w(const char *arg)
 #define APP_ARG_LPM_MAX_CHARS     4096
 #endif
 
-static int
-parse_arg_lpm(const char *arg)
-{
+static int parse_arg_lpm(const char *arg) {
 	const char *p = arg, *p0;
 
 	if (strnlen(arg, APP_ARG_LPM_MAX_CHARS + 1) == APP_ARG_TX_MAX_CHARS + 1) {
@@ -417,7 +405,7 @@ parse_arg_lpm(const char *arg)
 
 		p0 = strchr(p, '/');
 		if ((p0 == NULL) ||
-		    (str_to_unsigned_vals(p, p0 - p, '.', 4, &ip_a, &ip_b, &ip_c, &ip_d) != 4)) {
+				(str_to_unsigned_vals(p, p0 - p, '.', 4, &ip_a, &ip_b, &ip_c, &ip_d) != 4)) {
 			return -2;
 		}
 
@@ -437,8 +425,8 @@ parse_arg_lpm(const char *arg)
 		}
 
 		if ((ip_a >= 256) || (ip_b >= 256) || (ip_c >= 256) || (ip_d >= 256) ||
-		     (depth == 0) || (depth >= 32) ||
-			 (if_out >= APP_MAX_NIC_PORTS)) {
+				(depth == 0) || (depth >= 32) ||
+				(if_out >= APP_MAX_NIC_PORTS)) {
 			return -6;
 		}
 		ip = (ip_a << 24) | (ip_b << 16) | (ip_c << 8) | ip_d;
@@ -465,9 +453,7 @@ parse_arg_lpm(const char *arg)
 	return 0;
 }
 
-static int
-app_check_lpm_table(void)
-{
+static int app_check_lpm_table(void) {
 	uint32_t rule;
 
 	/* For each rule, check that the output I/F is enabled */
@@ -483,9 +469,7 @@ app_check_lpm_table(void)
 	return 0;
 }
 
-static int
-app_check_every_rx_port_is_tx_enabled(void)
-{
+static int app_check_every_rx_port_is_tx_enabled(void) {
 	uint8_t port;
 
 	for (port = 0; port < APP_MAX_NIC_PORTS; port ++) {
@@ -501,7 +485,7 @@ app_check_every_rx_port_is_tx_enabled(void)
 #define APP_ARG_RSZ_CHARS 63
 #endif
 
-static int
+	static int
 parse_arg_rsz(const char *arg)
 {
 	if (strnlen(arg, APP_ARG_RSZ_CHARS + 1) == APP_ARG_RSZ_CHARS + 1) {
@@ -509,17 +493,17 @@ parse_arg_rsz(const char *arg)
 	}
 
 	if (str_to_unsigned_vals(arg, APP_ARG_RSZ_CHARS, ',', 4,
-			&app.nic_rx_ring_size,
-			&app.ring_rx_size,
-			&app.ring_tx_size,
-			&app.nic_tx_ring_size) !=  4)
+				&app.nic_rx_ring_size,
+				&app.ring_rx_size,
+				&app.ring_tx_size,
+				&app.nic_tx_ring_size) !=  4)
 		return -2;
 
 
 	if ((app.nic_rx_ring_size == 0) ||
-		(app.nic_tx_ring_size == 0) ||
-		(app.ring_rx_size == 0) ||
-		(app.ring_tx_size == 0)) {
+			(app.nic_tx_ring_size == 0) ||
+			(app.ring_rx_size == 0) ||
+			(app.ring_tx_size == 0)) {
 		return -3;
 	}
 
@@ -530,7 +514,7 @@ parse_arg_rsz(const char *arg)
 #define APP_ARG_BSZ_CHARS 63
 #endif
 
-static int
+	static int
 parse_arg_bsz(const char *arg)
 {
 	const char *p = arg, *p0;
@@ -540,7 +524,7 @@ parse_arg_bsz(const char *arg)
 
 	p0 = strchr(p++, ')');
 	if ((p0 == NULL) ||
-	    (str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_io_rx_read, &app.burst_size_io_rx_write) !=  2)) {
+			(str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_io_rx_read, &app.burst_size_io_rx_write) !=  2)) {
 		return -2;
 	}
 
@@ -551,7 +535,7 @@ parse_arg_bsz(const char *arg)
 
 	p0 = strchr(p++, ')');
 	if ((p0 == NULL) ||
-	    (str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_worker_read, &app.burst_size_worker_write) !=  2)) {
+			(str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_worker_read, &app.burst_size_worker_write) !=  2)) {
 		return -4;
 	}
 
@@ -562,25 +546,25 @@ parse_arg_bsz(const char *arg)
 
 	p0 = strchr(p++, ')');
 	if ((p0 == NULL) ||
-	    (str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_io_tx_read, &app.burst_size_io_tx_write) !=  2)) {
+			(str_to_unsigned_vals(p, p0 - p, ',', 2, &app.burst_size_io_tx_read, &app.burst_size_io_tx_write) !=  2)) {
 		return -6;
 	}
 
 	if ((app.burst_size_io_rx_read == 0) ||
-		(app.burst_size_io_rx_write == 0) ||
-		(app.burst_size_worker_read == 0) ||
-		(app.burst_size_worker_write == 0) ||
-		(app.burst_size_io_tx_read == 0) ||
-		(app.burst_size_io_tx_write == 0)) {
+			(app.burst_size_io_rx_write == 0) ||
+			(app.burst_size_worker_read == 0) ||
+			(app.burst_size_worker_write == 0) ||
+			(app.burst_size_io_tx_read == 0) ||
+			(app.burst_size_io_tx_write == 0)) {
 		return -7;
 	}
 
 	if ((app.burst_size_io_rx_read > APP_MBUF_ARRAY_SIZE) ||
-		(app.burst_size_io_rx_write > APP_MBUF_ARRAY_SIZE) ||
-		(app.burst_size_worker_read > APP_MBUF_ARRAY_SIZE) ||
-		(app.burst_size_worker_write > APP_MBUF_ARRAY_SIZE) ||
-		((2 * app.burst_size_io_tx_read) > APP_MBUF_ARRAY_SIZE) ||
-		(app.burst_size_io_tx_write > APP_MBUF_ARRAY_SIZE)) {
+			(app.burst_size_io_rx_write > APP_MBUF_ARRAY_SIZE) ||
+			(app.burst_size_worker_read > APP_MBUF_ARRAY_SIZE) ||
+			(app.burst_size_worker_write > APP_MBUF_ARRAY_SIZE) ||
+			((2 * app.burst_size_io_tx_read) > APP_MBUF_ARRAY_SIZE) ||
+			(app.burst_size_io_tx_write > APP_MBUF_ARRAY_SIZE)) {
 		return -8;
 	}
 
@@ -591,35 +575,46 @@ parse_arg_bsz(const char *arg)
 #define APP_ARG_NUMERICAL_SIZE_CHARS 15
 #endif
 
-static int
-parse_arg_pos_lb(const char *arg)
-{
-	uint32_t x;
-	char *endpt;
+static int parse_arg_ip_list(const char *arg) {
+	FILE *fp;
+	int num, prefix;
+	uint32_t net;
+	char network[16];
+	char line[256];
 
 	if (strnlen(arg, APP_ARG_NUMERICAL_SIZE_CHARS + 1) == APP_ARG_NUMERICAL_SIZE_CHARS + 1) {
 		return -1;
 	}
 
-	errno = 0;
-	x = strtoul(arg, &endpt, 10);
-	if (errno != 0 || endpt == arg || *endpt != '\0'){
+	fp = fopen(arg,"r");
+	if (!fp){
 		return -2;
 	}
-
-	if (x >= 64) {
-		return -3;
+	app.ip_list = radix_tree_create();
+	while (fgets(line, sizeof(line), fp)) {
+		num = sscanf(line, "%[^/\n]/%d", network, &prefix);
+		if(num == 1){
+			net = (uint32_t)inet_addr(network);
+			if(radix_insert(app.ip_list, net, 32, 1)){
+				return -3;
+			}
+		}else if(num == 2){
+			net = (uint32_t)inet_addr(network);
+			if(radix_insert(app.ip_list, net, prefix, 1)){
+				return -3;
+			}
+		}else{
+			fclose(fp);
+			return -4;
+		}
 	}
-
-	app.pos_lb = (uint8_t) x;
+	fclose(fp);
 
 	return 0;
 }
 
 /* Parse the argument given in the command line of the application */
-int
-app_parse_args(int argc, char **argv)
-{
+int app_parse_args(int argc, char **argv) {
 	int opt, ret;
 	char **argvopt;
 	int option_index;
@@ -632,89 +627,90 @@ app_parse_args(int argc, char **argv)
 		{"rsz", 1, 0, 0},
 		{"bsz", 1, 0, 0},
 		{"pos-lb", 1, 0, 0},
+		{"ip-list", 1, 0, 0},
 		{NULL, 0, 0, 0}
 	};
 	uint32_t arg_w = 0;
 	uint32_t arg_rx = 0;
 	uint32_t arg_tx = 0;
-	uint32_t arg_lpm = 0;
+	//uint32_t arg_lpm = 0;
 	uint32_t arg_rsz = 0;
 	uint32_t arg_bsz = 0;
-	uint32_t arg_pos_lb = 0;
+	uint32_t arg_ip_list = 0;
 
 	argvopt = argv;
 
 	while ((opt = getopt_long(argc, argvopt, "",
-				lgopts, &option_index)) != EOF) {
+					lgopts, &option_index)) != EOF) {
 
 		switch (opt) {
-		/* long options */
-		case 0:
-			if (!strcmp(lgopts[option_index].name, "rx")) {
-				arg_rx = 1;
-				ret = parse_arg_rx(optarg);
-				if (ret) {
-					printf("Incorrect value for --rx argument (%d)\n", ret);
-					return -1;
+			/* long options */
+			case 0:
+				if (!strcmp(lgopts[option_index].name, "rx")) {
+					arg_rx = 1;
+					ret = parse_arg_rx(optarg);
+					if (ret) {
+						printf("Incorrect value for --rx argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "tx")) {
-				arg_tx = 1;
-				ret = parse_arg_tx(optarg);
-				if (ret) {
-					printf("Incorrect value for --tx argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "tx")) {
+					arg_tx = 1;
+					ret = parse_arg_tx(optarg);
+					if (ret) {
+						printf("Incorrect value for --tx argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "w")) {
-				arg_w = 1;
-				ret = parse_arg_w(optarg);
-				if (ret) {
-					printf("Incorrect value for --w argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "w")) {
+					arg_w = 1;
+					ret = parse_arg_w(optarg);
+					if (ret) {
+						printf("Incorrect value for --w argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "lpm")) {
-				arg_lpm = 1;
-				ret = parse_arg_lpm(optarg);
-				if (ret) {
-					printf("Incorrect value for --lpm argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "lpm")) {
+					//arg_lpm = 1;
+					ret = parse_arg_lpm(optarg);
+					if (ret) {
+						printf("Incorrect value for --lpm argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "rsz")) {
-				arg_rsz = 1;
-				ret = parse_arg_rsz(optarg);
-				if (ret) {
-					printf("Incorrect value for --rsz argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "rsz")) {
+					arg_rsz = 1;
+					ret = parse_arg_rsz(optarg);
+					if (ret) {
+						printf("Incorrect value for --rsz argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "bsz")) {
-				arg_bsz = 1;
-				ret = parse_arg_bsz(optarg);
-				if (ret) {
-					printf("Incorrect value for --bsz argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "bsz")) {
+					arg_bsz = 1;
+					ret = parse_arg_bsz(optarg);
+					if (ret) {
+						printf("Incorrect value for --bsz argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			if (!strcmp(lgopts[option_index].name, "pos-lb")) {
-				arg_pos_lb = 1;
-				ret = parse_arg_pos_lb(optarg);
-				if (ret) {
-					printf("Incorrect value for --pos-lb argument (%d)\n", ret);
-					return -1;
+				if (!strcmp(lgopts[option_index].name, "ip-list")) {
+					arg_ip_list = 1;
+					ret = parse_arg_ip_list(optarg);
+					if (ret) {
+						printf("Incorrect value for --ip-list argument (%d)\n", ret);
+						return -1;
+					}
 				}
-			}
-			break;
+				break;
 
-		default:
-			return -1;
+			default:
+				return -1;
 		}
 	}
 
 	/* Check that all mandatory arguments are provided */
-	if ((arg_rx == 0) || (arg_tx == 0) || (arg_w == 0) || (arg_lpm == 0)){
+	if ((arg_rx == 0) || (arg_tx == 0) || (arg_w == 0) || (arg_ip_list == 0)){
 		printf("Not all mandatory arguments are present\n");
 		return -1;
 	}
@@ -736,10 +732,6 @@ app_parse_args(int argc, char **argv)
 		app.burst_size_worker_write = APP_DEFAULT_BURST_SIZE_WORKER_WRITE;
 	}
 
-	if (arg_pos_lb == 0) {
-		app.pos_lb = APP_DEFAULT_IO_RX_LB_POS;
-	}
-
 	/* Check cross-consistency of arguments */
 	if ((ret = app_check_lpm_table()) < 0) {
 		printf("At least one LPM rule is inconsistent (%d)\n", ret);
@@ -759,9 +751,7 @@ app_parse_args(int argc, char **argv)
 	return ret;
 }
 
-int
-app_get_nic_rx_queues_per_port(uint8_t port)
-{
+int app_get_nic_rx_queues_per_port(uint8_t port) {
 	uint32_t i, count;
 
 	if (port >= APP_MAX_NIC_PORTS) {
@@ -778,7 +768,7 @@ app_get_nic_rx_queues_per_port(uint8_t port)
 	return count;
 }
 
-int
+	int
 app_get_lcore_for_nic_rx(uint8_t port, uint8_t queue, uint32_t *lcore_out)
 {
 	uint32_t lcore;
@@ -793,7 +783,7 @@ app_get_lcore_for_nic_rx(uint8_t port, uint8_t queue, uint32_t *lcore_out)
 
 		for (i = 0; i < lp->rx.n_nic_queues; i ++) {
 			if ((lp->rx.nic_queues[i].port == port) &&
-			    (lp->rx.nic_queues[i].queue == queue)) {
+					(lp->rx.nic_queues[i].queue == queue)) {
 				*lcore_out = lcore;
 				return 0;
 			}
@@ -803,9 +793,7 @@ app_get_lcore_for_nic_rx(uint8_t port, uint8_t queue, uint32_t *lcore_out)
 	return -1;
 }
 
-int
-app_get_lcore_for_nic_tx(uint8_t port, uint32_t *lcore_out)
-{
+int app_get_lcore_for_nic_tx(uint8_t port, uint32_t *lcore_out) {
 	uint32_t lcore;
 
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
@@ -815,7 +803,6 @@ app_get_lcore_for_nic_tx(uint8_t port, uint32_t *lcore_out)
 		if (app.lcore_params[lcore].type != e_APP_LCORE_IO) {
 			continue;
 		}
-
 		for (i = 0; i < lp->tx.n_nic_ports; i ++) {
 			if (lp->tx.nic_ports[i] == port) {
 				*lcore_out = lcore;
@@ -827,9 +814,7 @@ app_get_lcore_for_nic_tx(uint8_t port, uint32_t *lcore_out)
 	return -1;
 }
 
-int
-app_is_socket_used(uint32_t socket)
-{
+int app_is_socket_used(uint32_t socket) {
 	uint32_t lcore;
 
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
@@ -845,9 +830,7 @@ app_is_socket_used(uint32_t socket)
 	return 0;
 }
 
-uint32_t
-app_get_lcores_io_rx(void)
-{
+uint32_t app_get_lcores_io_rx(void) {
 	uint32_t lcore, count;
 
 	count = 0;
@@ -855,7 +838,7 @@ app_get_lcores_io_rx(void)
 		struct app_lcore_params_io *lp_io = &app.lcore_params[lcore].io;
 
 		if ((app.lcore_params[lcore].type != e_APP_LCORE_IO) ||
-		    (lp_io->rx.n_nic_queues == 0)) {
+				(lp_io->rx.n_nic_queues == 0)) {
 			continue;
 		}
 
@@ -865,7 +848,7 @@ app_get_lcores_io_rx(void)
 	return count;
 }
 
-uint32_t
+	uint32_t
 app_get_lcores_worker(void)
 {
 	uint32_t lcore, count;
@@ -887,10 +870,8 @@ app_get_lcores_worker(void)
 	return count;
 }
 
-void
-app_print_params(void)
-{
-	unsigned port, queue, lcore, rule, i, j;
+void app_print_params(void) {
+	unsigned port, queue, lcore, rule, i;
 
 	/* Print NIC RX configuration */
 	printf("NIC RX ports: ");
@@ -916,7 +897,7 @@ app_print_params(void)
 		struct app_lcore_params_io *lp = &app.lcore_params[lcore].io;
 
 		if ((app.lcore_params[lcore].type != e_APP_LCORE_IO) ||
-		    (lp->rx.n_nic_queues == 0)) {
+				(lp->rx.n_nic_queues == 0)) {
 			continue;
 		}
 
@@ -925,8 +906,8 @@ app_print_params(void)
 		printf("RX ports  ");
 		for (i = 0; i < lp->rx.n_nic_queues; i ++) {
 			printf("(%u, %u)  ",
-				(unsigned) lp->rx.nic_queues[i].port,
-				(unsigned) lp->rx.nic_queues[i].queue);
+					(unsigned) lp->rx.nic_queues[i].port,
+					(unsigned) lp->rx.nic_queues[i].queue);
 		}
 		printf("; ");
 
@@ -946,9 +927,9 @@ app_print_params(void)
 		}
 
 		printf("Worker lcore %u (socket %u) ID %u: ",
-			lcore,
-			rte_lcore_to_socket_id(lcore),
-			(unsigned)lp->worker_id);
+				lcore,
+				rte_lcore_to_socket_id(lcore),
+				(unsigned)lp->worker_id);
 
 		printf("Input rings  ");
 		for (i = 0; i < lp->n_rings_in; i ++) {
@@ -975,7 +956,7 @@ app_print_params(void)
 		uint32_t n_workers = app_get_lcores_worker();
 
 		if ((app.lcore_params[lcore].type != e_APP_LCORE_IO) ||
-		     (lp->tx.n_nic_ports == 0)) {
+				(lp->tx.n_nic_ports == 0)) {
 			continue;
 		}
 
@@ -983,6 +964,7 @@ app_print_params(void)
 
 		printf("Input rings per TX port  ");
 		for (i = 0; i < lp->tx.n_nic_ports; i ++) {
+			unsigned j;
 			port = lp->tx.nic_ports[i];
 
 			printf("%u (", port);
@@ -1005,9 +987,9 @@ app_print_params(void)
 		}
 
 		printf("Worker lcore %u (socket %u) ID %u: \n",
-			lcore,
-			rte_lcore_to_socket_id(lcore),
-			(unsigned)lp->worker_id);
+				lcore,
+				rte_lcore_to_socket_id(lcore),
+				(unsigned)lp->worker_id);
 
 		printf("Output rings per TX port  ");
 		for (port = 0; port < APP_MAX_NIC_PORTS; port ++) {
@@ -1027,29 +1009,29 @@ app_print_params(void)
 		uint8_t if_out = app.lpm_rules[rule].if_out;
 
 		printf("\t%u: %u.%u.%u.%u/%u => %u;\n",
-			rule,
-			(unsigned) (ip & 0xFF000000) >> 24,
-			(unsigned) (ip & 0x00FF0000) >> 16,
-			(unsigned) (ip & 0x0000FF00) >> 8,
-			(unsigned) ip & 0x000000FF,
-			(unsigned) depth,
-			(unsigned) if_out
-		);
+				rule,
+				(unsigned) (ip & 0xFF000000) >> 24,
+				(unsigned) (ip & 0x00FF0000) >> 16,
+				(unsigned) (ip & 0x0000FF00) >> 8,
+				(unsigned) ip & 0x000000FF,
+				(unsigned) depth,
+				(unsigned) if_out
+			  );
 	}
 
 	/* Rings */
 	printf("Ring sizes: NIC RX = %u; Worker in = %u; Worker out = %u; NIC TX = %u;\n",
-		(unsigned) app.nic_rx_ring_size,
-		(unsigned) app.ring_rx_size,
-		(unsigned) app.ring_tx_size,
-		(unsigned) app.nic_tx_ring_size);
+			(unsigned) app.nic_rx_ring_size,
+			(unsigned) app.ring_rx_size,
+			(unsigned) app.ring_tx_size,
+			(unsigned) app.nic_tx_ring_size);
 
 	/* Bursts */
 	printf("Burst sizes: I/O RX (rd = %u, wr = %u); Worker (rd = %u, wr = %u); I/O TX (rd = %u, wr = %u)\n",
-		(unsigned) app.burst_size_io_rx_read,
-		(unsigned) app.burst_size_io_rx_write,
-		(unsigned) app.burst_size_worker_read,
-		(unsigned) app.burst_size_worker_write,
-		(unsigned) app.burst_size_io_tx_read,
-		(unsigned) app.burst_size_io_tx_write);
+			(unsigned) app.burst_size_io_rx_read,
+			(unsigned) app.burst_size_io_rx_write,
+			(unsigned) app.burst_size_worker_read,
+			(unsigned) app.burst_size_worker_write,
+			(unsigned) app.burst_size_io_tx_read,
+			(unsigned) app.burst_size_io_tx_write);
 }

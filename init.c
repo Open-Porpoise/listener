@@ -152,9 +152,7 @@ app_init_mbuf_pools(void)
 	}
 }
 
-static void
-app_init_lpm_tables(void)
-{
+static void app_init_lpm_tables(void) {
 	unsigned socket, lcore;
 
 	/* Init the LPM tables */
@@ -208,9 +206,7 @@ app_init_lpm_tables(void)
 	}
 }
 
-static void
-app_init_rings_rx(void)
-{
+static void app_init_rings_rx(void) {
 	unsigned lcore;
 
 	/* Initialize the rings for the RX side */
@@ -287,9 +283,7 @@ app_init_rings_rx(void)
 	}
 }
 
-static void
-app_init_rings_tx(void)
-{
+static void app_init_rings_tx(void) {
 	unsigned lcore;
 
 	/* Initialize the rings for the TX side */
@@ -441,7 +435,8 @@ app_init_nics(void)
 		}
 
 		/* Init port */
-		printf("Initializing NIC port %u ...\n", (unsigned) port);
+		printf("Initializing NIC port %u rx_queues %u tx_queues %u ...\n", 
+				(unsigned) port, n_rx_queues, n_tx_queues);
 		ret = rte_eth_dev_configure(
 			port,
 			(uint8_t) n_rx_queues,
@@ -509,6 +504,30 @@ app_init_nics(void)
 	check_all_ports_link_status(APP_MAX_NIC_PORTS, (~0x0));
 }
 
+static void app_init_conn_tab(void){
+	unsigned lcore;
+
+	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
+		struct app_lcore_params_worker *lp_worker = &app.lcore_params[lcore].worker;
+		int i;
+
+		if (app.lcore_params[lcore].type != e_APP_LCORE_WORKER) {
+			continue;
+		}
+
+		lp_worker->app_conn_tab = malloc(APP_CONN_TAB_SIZE * sizeof(*lp_worker->app_conn_tab));
+		if(!lp_worker->app_conn_tab){
+			rte_panic("no memory\n");
+		}
+
+		for(i = 0; i < APP_CONN_TAB_SIZE; i++){
+			//INIT_LIST_HEAD(&lp_worker->app_conn_tab[i]);
+			lp_worker->app_conn_tab[i] = 0;
+		}
+		lp_worker->app_conn_count = 0;
+	}
+}
+
 void
 app_init(void)
 {
@@ -518,6 +537,8 @@ app_init(void)
 	app_init_rings_rx();
 	app_init_rings_tx();
 	app_init_nics();
-
+	//app_init_protocol();
+	app_init_conn_tab();
 	printf("Initialization completed.\n");
 }
+

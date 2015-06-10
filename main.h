@@ -1,38 +1,22 @@
-/*-
- *   BSD LICENSE
- *
- *   Copyright(c) 2010-2014 Intel Corporation. All rights reserved.
- *   All rights reserved.
- *
- *   Redistribution and use in source and binary forms, with or without
- *   modification, are permitted provided that the following conditions
- *   are met:
- *
- *     * Redistributions of source code must retain the above copyright
- *       notice, this list of conditions and the following disclaimer.
- *     * Redistributions in binary form must reproduce the above copyright
- *       notice, this list of conditions and the following disclaimer in
- *       the documentation and/or other materials provided with the
- *       distribution.
- *     * Neither the name of Intel Corporation nor the names of its
- *       contributors may be used to endorse or promote products derived
- *       from this software without specific prior written permission.
- *
- *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- *   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- *   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- *   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- *   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- *   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- *   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- *   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
 #ifndef _MAIN_H_
 #define _MAIN_H_
+
+
+#include "geolocation.h"
+
+
+/* */
+#ifndef CONFIG_APP_PROTO_TCP
+#define CONFIG_APP_PROTO_TCP 1
+#endif
+
+#ifndef CONFIG_APP_PROTO_UDP
+#define CONFIG_APP_PROTO_UDP 0
+#endif
+
+#ifndef APP_CONN_TAB_SIZE
+#define APP_CONN_TAB_SIZE (1<<24)
+#endif
 
 /* Logical cores */
 #ifndef APP_MAX_SOCKETS
@@ -292,9 +276,12 @@ struct app_lcore_params_worker {
 	struct rte_lpm *lpm_table;
 	uint32_t worker_id;
 
+	/* ip fragment */
+	struct rte_ip_frag_tbl *frag_tbl;
+
 	/* Internal buffers */
 	struct app_mbuf_array mbuf_in;
-	struct app_mbuf_array mbuf_out[APP_MAX_NIC_PORTS];
+	struct app_mbuf_array mbuf_out[APP_MAX_WORKER_LCORES];
 	uint8_t mbuf_out_flush[APP_MAX_NIC_PORTS];
 
 	/* Stats */
@@ -302,6 +289,11 @@ struct app_lcore_params_worker {
 	uint32_t rings_in_iters[APP_MAX_IO_LCORES];
 	uint32_t rings_out_count[APP_MAX_NIC_PORTS];
 	uint32_t rings_out_iters[APP_MAX_NIC_PORTS];
+
+	/* conn_tab */
+	//struct list_head *app_conn_tab;
+	uint8_t *app_conn_tab;
+	uint32_t app_conn_count;
 };
 
 struct app_lcore_params {
@@ -350,13 +342,70 @@ struct app_params {
 	uint32_t burst_size_worker_write;
 
 	/* load balancing */
-	uint8_t pos_lb;
+	//uint8_t pos_lb;
+
+	/* ip list */
+	radix_tree_t *ip_list;
 } __rte_cache_aligned;
+
+/*
+ *      TCP State Values
+ */
+enum {
+	APP_TCP_S_NONE = 0,
+	APP_TCP_S_ESTABLISHED,
+	APP_TCP_S_SYN_SENT,
+	APP_TCP_S_SYN_RECV,
+	APP_TCP_S_FIN_WAIT,
+	APP_TCP_S_TIME_WAIT,
+	APP_TCP_S_CLOSE,
+	APP_TCP_S_CLOSE_WAIT,
+	APP_TCP_S_LAST_ACK,
+	APP_TCP_S_LISTEN,
+	APP_TCP_S_SYNACK,
+	APP_TCP_S_LAST
+};
+
+/*
+ *	UDP State Values
+ */
+enum {
+	APP_UDP_S_NORMAL,
+	APP_UDP_S_LAST,
+};
+
+/*
+ *	ICMP State Values
+ */
+enum {
+	APP_ICMP_S_NORMAL,
+	APP_ICMP_S_LAST,
+};
+
+
+struct app_protocol {
+	struct app_protocol	*next;
+	char		*name;
+	uint16_t			protocol;
+	uint16_t			num_states;
+	int			dont_defrag;
+	//rte_atomic32_t		appcnt;		/* counter of proto app incs */
+	int			*timeout_table;	/* protocol timeout table */
+
+	void (*init)(struct app_protocol *pp);
+
+	const char *(*state_name)(int state);
+
+	void (*timeout_change)(struct app_protocol *pp, int flags);
+
+	int (*set_state_timeout)(struct app_protocol *pp, char *sname, int to);
+};
+
 
 extern struct app_params app;
 
 int app_parse_args(int argc, char **argv);
-void app_print_usage(void);
+void app_print_usage(char *prog);
 void app_init(void);
 int app_lcore_main_loop(void *arg);
 
@@ -367,5 +416,8 @@ int app_is_socket_used(uint32_t socket);
 uint32_t app_get_lcores_io_rx(void);
 uint32_t app_get_lcores_worker(void);
 void app_print_params(void);
+
+
+int  app_init_protocol(void);
 
 #endif /* _MAIN_H_ */

@@ -1,2 +1,2 @@
 #!/bin/sh
-sudo ./build/listener -c 0xf8 -n 4 -- --rx "(0,0,3),(1,0,3)" --tx "(0,3),(1,3)" --w "4,5,6,7" --lpm "1.0.0.0/24=>0; 1.0.1.0/24=>1;" --pos-lb 29
+sudo ./build/listener -c 0xe -n 2 -- --rx "(0,0,1),(1,0,1)" --tx "(0,1),(1,1)" --w "2,3" --ip-list ip_list.txt
