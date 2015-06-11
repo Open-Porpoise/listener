@@ -1,6 +1,48 @@
 #ifndef _MAIN_H_
 #define _MAIN_H_
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <sys/types.h>
+#include <string.h>
+#include <sys/queue.h>
+#include <stdarg.h>
+#include <errno.h>
+#include <getopt.h>
+#include <unistd.h>
+
+
+#include <rte_common.h>
+#include <rte_byteorder.h>
+#include <rte_log.h>
+#include <rte_memory.h>
+#include <rte_memcpy.h>
+#include <rte_memzone.h>
+#include <rte_eal.h>
+#include <rte_per_lcore.h>
+#include <rte_launch.h>
+#include <rte_atomic.h>
+#include <rte_cycles.h>
+#include <rte_prefetch.h>
+#include <rte_lcore.h>
+#include <rte_per_lcore.h>
+#include <rte_branch_prediction.h>
+#include <rte_interrupts.h>
+#include <rte_pci.h>
+#include <rte_random.h>
+#include <rte_debug.h>
+#include <rte_ether.h>
+#include <rte_ethdev.h>
+#include <rte_ring.h>
+#include <rte_mempool.h>
+#include <rte_mbuf.h>
+#include <rte_ip.h>
+#include <rte_tcp.h>
+#include <rte_lpm.h>
+
+
 #include <rte_timer.h>
 #include "geolocation.h"
 
@@ -422,5 +464,8 @@ void app_print_params(void);
 
 
 int  app_init_protocol(void);
+void deal_pkt(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt);
+void app_worker_counter_reset(uint32_t lcore_id, 
+		struct app_lcore_params_worker *lp_worker);
 
 #endif /* _MAIN_H_ */

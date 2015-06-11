@@ -529,7 +529,7 @@ static void app_init_conn_tab(void){
 	}
 }
 
-/* timer1 callback */
+/* timer callback */
 static void
 app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
 	  __attribute__((unused)) void *arg)
@@ -537,8 +537,8 @@ app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
 	unsigned lcore_id = rte_lcore_id();
 	struct app_lcore_params_worker *lp_worker = (struct app_lcore_params_worker *)arg;
 
-	printf("%s() on lcore %u %lx\n", __func__, lcore_id, (uintptr_t)lp_worker);
-
+	app_worker_counter_reset(lcore_id, lp_worker);
+	//printf("%s() on lcore %u %lx\n", __func__, lcore_id, (uintptr_t)lp_worker);
 }
 
 static void app_init_timer(void){

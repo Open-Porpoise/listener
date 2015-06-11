@@ -1,4 +1,4 @@
-#include "core.h"
+#include "main.h"
 #include "utils.h"
 
 void deal_pkt(struct app_lcore_params_worker *lp,
@@ -64,4 +64,11 @@ void deal_pkt(struct app_lcore_params_worker *lp,
 }
 
 
+void app_worker_counter_reset(uint32_t lcore_id, 
+		struct app_lcore_params_worker *lp_worker){
+	memset(lp_worker->app_conn_tab, 0, 
+			APP_CONN_TAB_SIZE * sizeof(*lp_worker->app_conn_tab));
+	printf("lcore(%u) hash element count: %u\n", lcore_id, lp_worker->app_conn_count);
+	lp_worker->app_conn_count = 0;
+}
 

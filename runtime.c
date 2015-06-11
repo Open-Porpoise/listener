@@ -71,7 +71,6 @@
 #include <rte_lpm.h>
 #include <rte_timer.h>
 #include "utils.h"
-#include "core.h"
 
 #include "main.h"
 
