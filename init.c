@@ -525,7 +525,8 @@ static void app_init_conn_tab(void){
 			//INIT_LIST_HEAD(&lp_worker->app_conn_tab[i]);
 			lp_worker->app_conn_tab[i] = 0;
 		}
-		lp_worker->app_conn_count = 0;
+		lp_worker->app_conn_count[0] = 0;
+		lp_worker->app_conn_count[1] = 0;
 	}
 }
 

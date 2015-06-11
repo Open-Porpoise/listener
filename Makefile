@@ -44,7 +44,7 @@ APP = listener
 # all source are stored in SRCS-y
 SRCS-y := main.c config.c init.c runtime.c utils.c core.c geolocation.c radix_tree.c avl.c
 
-CFLAGS += -O3 -g 
+CFLAGS += -O0 -g 
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS_config.o := -D_GNU_SOURCE
 

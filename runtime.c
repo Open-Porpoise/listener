@@ -258,8 +258,8 @@ app_lcore_io_rx(
 
 			rte_prefetch0(mbuf_2_0);
 			rte_prefetch0(mbuf_2_1);
-			rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_0, void *));
-			rte_prefetch0(rte_pktmbuf_mtod(mbuf_2_1, void *));
+			rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_0, void *));
+			rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_1, void *));
 
 			app_lcore_io_rx_buffer_to_send(lp, 
 					xmit_l34_hash32(mbuf_0_0) & (n_workers - 1), mbuf_0_0, bsz_wr);
@@ -277,7 +277,6 @@ app_lcore_io_rx(
 			mbuf_2_0 = mbuf_2_1;
 
 			rte_prefetch0(mbuf_1_0);
-			rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_0, void *));
 			app_lcore_io_rx_buffer_to_send(lp, 
 					xmit_l34_hash32(mbuf) & (n_workers - 1), mbuf, bsz_wr);
 		}

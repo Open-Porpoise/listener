@@ -1,5 +1,14 @@
+#include <rte_jhash.h>
+
 #include "main.h"
 #include "utils.h"
+
+#define	PRIME_VALUE	0xeaad8405
+
+static uint32_t app_conn_hashkey(uint32_t s_addr, uint16_t s_port, 
+		uint32_t d_addr, uint16_t d_port){
+	return rte_jhash_3words(s_addr, d_addr, s_port << 16 | d_port, PRIME_VALUE);
+}
 
 void deal_pkt(struct app_lcore_params_worker *lp,
 		struct rte_mbuf *pkt){
@@ -9,7 +18,7 @@ void deal_pkt(struct app_lcore_params_worker *lp,
 
 	struct udp_hdr *udp_hdr = NULL;
 	struct tcp_hdr *tcp_hdr = NULL;
-	uint32_t hash, l3hash = 0, l4hash = 0;
+	uint32_t hash;
 	//struct app_protocol *pp;
 	//struct app_conn *cp;
 
@@ -17,7 +26,6 @@ void deal_pkt(struct app_lcore_params_worker *lp,
 		struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr *)((char *)(eth_hdr + 1) + vlan_offset);
 		size_t ip_hdr_offset;
 
-		l3hash = ipv4_hash(ipv4_hdr);
 		ip_hdr_offset = (ipv4_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
 				IPV4_IHL_MULTIPLIER;
 
@@ -30,25 +38,22 @@ void deal_pkt(struct app_lcore_params_worker *lp,
 		if (ipv4_hdr->next_proto_id == IPPROTO_TCP) {
 			tcp_hdr = (struct tcp_hdr *)((char *)ipv4_hdr +
 					ip_hdr_offset);
-			l4hash = HASH_L4_PORTS(tcp_hdr);
-			hash = l3hash ^ l4hash;
-			hash ^= hash >> 16;
-			hash ^= hash >> 8;
+			//v = rte_jhash_3words(p[0], p[1], key->id, PRIME_VALUE);
+			hash = app_conn_hashkey(ipv4_hdr->src_addr, tcp_hdr->src_port, 
+					ipv4_hdr->dst_addr, tcp_hdr->dst_port);
 			hash &= APP_CONN_TAB_SIZE - 1;
 			if(!lp->app_conn_tab[hash]){
-				lp->app_conn_count++;
+				lp->app_conn_count[0]++;
 				lp->app_conn_tab[hash] = 1;
 			}
 		} else if (ipv4_hdr->next_proto_id == IPPROTO_UDP) {
 			udp_hdr = (struct udp_hdr *)((char *)ipv4_hdr +
 					ip_hdr_offset);
-			l4hash = HASH_L4_PORTS(udp_hdr);
-			hash = l3hash ^ l4hash;
-			hash ^= hash >> 16;
-			hash ^= hash >> 8;
+			hash = app_conn_hashkey(ipv4_hdr->src_addr, udp_hdr->src_port, 
+					ipv4_hdr->dst_addr, udp_hdr->dst_port);
 			hash &= APP_CONN_TAB_SIZE - 1;
 			if(!lp->app_conn_tab[hash]){
-				lp->app_conn_count++;
+				lp->app_conn_count[0]++;
 				lp->app_conn_tab[hash] = 1;
 			}
 		}
@@ -66,9 +71,10 @@ void deal_pkt(struct app_lcore_params_worker *lp,
 
 void app_worker_counter_reset(uint32_t lcore_id, 
 		struct app_lcore_params_worker *lp_worker){
-	memset(lp_worker->app_conn_tab, 0, 
-			APP_CONN_TAB_SIZE * sizeof(*lp_worker->app_conn_tab));
-	printf("lcore(%u) hash element count: %u\n", lcore_id, lp_worker->app_conn_count);
-	lp_worker->app_conn_count = 0;
+	//memset(lp_worker->app_conn_tab, 0, 
+	//		APP_CONN_TAB_SIZE * sizeof(*lp_worker->app_conn_tab));
+	printf("lcore(%u) hash element count: %u\n", lcore_id, 
+			lp_worker->app_conn_count[0] - lp_worker->app_conn_count[1]);
+	lp_worker->app_conn_count[1] = lp_worker->app_conn_count[0];
 }
 

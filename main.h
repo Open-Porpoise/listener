@@ -337,7 +337,7 @@ struct app_lcore_params_worker {
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
 	uint8_t *app_conn_tab;
-	uint32_t app_conn_count;
+	uint32_t app_conn_count[2];
 	struct rte_timer app_timer;
 };
 
