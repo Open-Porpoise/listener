@@ -17,6 +17,7 @@
 
 #define HASH_L4_PORTS(h) ((h)->src_port ^ (h)->dst_port)
 
+void dump_mbuf(const struct rte_mbuf *m);
 uint32_t xmit_l34_hash32(const struct rte_mbuf *buf);
 size_t get_vlan_offset(struct ether_hdr *eth_hdr, uint16_t *proto);
 

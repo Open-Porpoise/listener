@@ -39,12 +39,32 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 #include <rte_ip.h>
+#include <rte_ip_frag.h>
 #include <rte_tcp.h>
 #include <rte_lpm.h>
 
 
 #include <rte_timer.h>
 #include "geolocation.h"
+
+
+/* ip reassebly */
+#define PREFETCH_OFFSET 3
+#define NB_MBUF 8192
+/* allow max jumbo frame 9.5 KB */
+#define JUMBO_FRAME_MAX_SIZE	0x2600
+#define	MAX_FLOW_NUM	UINT16_MAX
+#define	MIN_FLOW_NUM	1
+#define	DEF_FLOW_NUM	0x1000
+/* TTL numbers are in ms. */
+#define	MAX_FLOW_TTL	(3600 * MS_PER_S)
+#define	MIN_FLOW_TTL	1
+#define	DEF_FLOW_TTL	MS_PER_S
+#define MAX_FRAG_NUM RTE_LIBRTE_IP_FRAG_MAX_FRAG
+/* Should be power of two. */
+#define	IP_FRAG_TBL_BUCKET_ENTRIES	16
+#define BURST_TX_DRAIN_US 100 /* TX drain every ~100us */
+
 
 
 /* */
@@ -320,9 +340,6 @@ struct app_lcore_params_worker {
 	struct rte_lpm *lpm_table;
 	uint32_t worker_id;
 
-	/* ip fragment */
-	struct rte_ip_frag_tbl *frag_tbl;
-
 	/* Internal buffers */
 	struct app_mbuf_array mbuf_in;
 	struct app_mbuf_array mbuf_out[APP_MAX_WORKER_LCORES];
@@ -334,11 +351,18 @@ struct app_lcore_params_worker {
 	uint32_t rings_out_count[APP_MAX_NIC_PORTS];
 	uint32_t rings_out_iters[APP_MAX_NIC_PORTS];
 
+	/* ip fragment */
+	struct rte_ip_frag_tbl *frag_tbl;
+	struct rte_ip_frag_death_row death_row;
+
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
 	uint8_t *app_conn_tab;
 	uint32_t app_conn_count[2];
 	struct rte_timer app_timer;
+	uint32_t app_frag_count;
+	uint32_t app_unknow_count;
+	uint32_t app_vlan_count;
 };
 
 struct app_lcore_params {
@@ -464,7 +488,7 @@ void app_print_params(void);
 
 
 int  app_init_protocol(void);
-void deal_pkt(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt);
+void deal_pkt(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt, uint64_t tms);
 void app_worker_counter_reset(uint32_t lcore_id, 
 		struct app_lcore_params_worker *lp_worker);
 

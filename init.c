@@ -542,10 +542,12 @@ app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
 	//printf("%s() on lcore %u %lx\n", __func__, lcore_id, (uintptr_t)lp_worker);
 }
 
-static void app_init_timer(void){
+static void app_init_worker(void){
 	unsigned lcore;
 	uint64_t hz;
 	int ret;
+	int socket;
+	uint64_t frag_cycles;
 
 	hz = rte_get_timer_hz();
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
@@ -555,8 +557,20 @@ static void app_init_timer(void){
 		if (app.lcore_params[lcore].type != e_APP_LCORE_WORKER) {
 			continue;
 		}
+
+		/* timer */
 		ret = rte_timer_reset(&lp_worker->app_timer, hz*60, PERIODICAL, lcore, app_timer_cb, lp_worker);
 		printf("ret_timer_reset lcore:%d ret:%d\n", lcore, ret);
+
+		/* frag */
+		socket = rte_lcore_to_socket_id(lcore);
+		frag_cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_FLOW_TTL;
+		if ((lp_worker->frag_tbl = rte_ip_frag_table_create(DEF_FLOW_NUM,
+				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, frag_cycles,
+				socket)) == NULL) {
+			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
+				DEF_FLOW_NUM, lcore);
+		}
 	}
 }
 
@@ -571,7 +585,7 @@ app_init(void)
 	app_init_nics();
 	//app_init_protocol();
 	app_init_conn_tab();
-	app_init_timer();
+	app_init_worker();
 	printf("Initialization completed.\n");
 }
 

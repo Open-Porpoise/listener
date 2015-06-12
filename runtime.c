@@ -475,7 +475,7 @@ static void app_lcore_main_loop_io(void) {
 }
 
 static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
-		uint32_t bsz_rd) {
+		uint32_t bsz_rd, uint64_t cur_tsc) {
 	uint32_t i, j;
 	for (i = 0; i < lp->n_rings_in; i ++) {
 		struct rte_ring *ring_in = lp->rings_in[i];
@@ -490,24 +490,10 @@ static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
 			continue;
 		}
 
-#if APP_WORKER_DROP_ALL_PACKETS
-		for (j = 0; j < bsz_rd; j ++) {
-			struct rte_mbuf *pkt = lp->mbuf_in.array[j];
-			rte_pktmbuf_free(pkt);
-		}
-
-		continue;
-#endif
-
 		APP_WORKER_PREFETCH1(rte_pktmbuf_mtod(lp->mbuf_in.array[0], unsigned char *));
 		APP_WORKER_PREFETCH0(lp->mbuf_in.array[1]);
 
 		for (j = 0; j < bsz_rd; j ++) {
-			//struct rte_mbuf *pkt;
-			//struct ipv4_hdr *ipv4_hdr;
-			//uint32_t ipv4_dst, pos;
-			//uint8_t port;
-
 			if (likely(j < bsz_rd - 1)) {
 				APP_WORKER_PREFETCH1(rte_pktmbuf_mtod(lp->mbuf_in.array[j+1], unsigned char *));
 			}
@@ -516,57 +502,7 @@ static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
 			}
 
 			/* todo: deal this pkt */
-			deal_pkt(lp, lp->mbuf_in.array[j]);
-			continue;
-
-#if 0
-			pkt = lp->mbuf_in.array[j];
-			ipv4_hdr = (struct ipv4_hdr *)(rte_pktmbuf_mtod(pkt, unsigned char *) + sizeof(struct ether_hdr));
-			ipv4_dst = rte_be_to_cpu_32(ipv4_hdr->dst_addr);
-
-			if (unlikely(rte_lpm_lookup(lp->lpm_table, ipv4_dst, &port) != 0)) {
-				port = pkt->port;
-			}
-
-			pos = lp->mbuf_out[port].n_mbufs;
-
-			lp->mbuf_out[port].array[pos ++] = pkt;
-			if (likely(pos < bsz_wr)) {
-				lp->mbuf_out[port].n_mbufs = pos;
-				continue;
-			}
-
-			ret = rte_ring_sp_enqueue_bulk(
-				lp->rings_out[port],
-				(void **) lp->mbuf_out[port].array,
-				bsz_wr);
-
-#if APP_STATS
-			lp->rings_out_iters[port] ++;
-			if (ret == 0) {
-				lp->rings_out_count[port] += 1;
-			}
-			if (lp->rings_out_iters[port] == APP_STATS){
-				printf("\t\tWorker %u out (NIC port %u): enq success rate = %.2f\n",
-					(unsigned) lp->worker_id,
-					(unsigned) port,
-					((double) lp->rings_out_count[port]) / ((double) lp->rings_out_iters[port]));
-				lp->rings_out_iters[port] = 0;
-				lp->rings_out_count[port] = 0;
-			}
-#endif
-
-			if (unlikely(ret == -ENOBUFS)) {
-				uint32_t k;
-				for (k = 0; k < bsz_wr; k ++) {
-					struct rte_mbuf *pkt_to_free = lp->mbuf_out[port].array[k];
-					rte_pktmbuf_free(pkt_to_free);
-				}
-			}
-
-			lp->mbuf_out[port].n_mbufs = 0;
-			lp->mbuf_out_flush[port] = 0;
-#endif
+			deal_pkt(lp, lp->mbuf_in.array[j], cur_tsc);
 		}
 	}
 }
@@ -627,7 +563,9 @@ static void app_lcore_main_loop_worker(void) {
 			i = 0;
 		}
 
-		app_lcore_worker(lp, bsz_rd);
+		app_lcore_worker(lp, bsz_rd, cur_tsc);
+
+		rte_ip_frag_free_death_row(&lp->death_row, PREFETCH_OFFSET);
 
 		i ++;
 	}

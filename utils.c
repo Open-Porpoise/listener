@@ -1,4 +1,92 @@
+#include "main.h"
 #include "utils.h"
+
+void dump_mbuf(const struct rte_mbuf *m) {
+	struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
+	uint16_t proto = eth_hdr->ether_type;
+	size_t vlan_offset = get_vlan_offset(eth_hdr, &proto);
+
+	printf("type:%d vlan_offset:%u vlan_hdr->eth_proto:%d\n", 
+			eth_hdr->ether_type, (uint32_t)vlan_offset, proto);
+
+#if 0
+	struct iphdr *iph;
+	struct tcphdr *th;
+	struct nf_conn *ct;
+	enum ip_conntrack_info ctinfo;
+
+	int i, llen, dlen;
+	const unsigned char *pos;
+	const int line_len = 16;
+	char buff[1024-32];
+	char *p;
+
+	iph = ip_hdr(skb);
+
+	p = buff;
+	if (iph->protocol != IPPROTO_TCP){
+		p += snprintf(p, sizeof(buff) - (p - buff), "%s: protocal not tcp [%d]\n", __FUNCTION__, iph->protocol);
+		printk(KERN_DEBUG "%s", buff);
+		return;
+	}
+	th = (struct tcphdr *) ((char*)iph + iph->ihl*4);
+	dlen = ntohs(iph->tot_len) - iph->ihl * 4 - th->doff * 4;
+
+	{
+		p += snprintf(p, sizeof(buff) - (p - buff),
+			"%s:%lu skb len/datalen:%d/%d, dlen:%d %pI4:%u(%s)-->%pI4:%u(%s), seq:%x, ack:%x, next seq:%x\n\t[",
+			__FUNCTION__, jiffies, skb->len, skb->data_len, dlen,
+			&iph->saddr, ntohs(th->source), in  ? in->name  : "NULL",
+			&iph->daddr, ntohs(th->dest),   out ? out->name : "NULL",
+			ntohl(th->seq), ntohl(th->ack_seq), ntohl(th->seq)+(dlen > 0 ? dlen : 1) );
+		if(th->fin) p += snprintf(p, sizeof(buff) - (p - buff), "F");
+		if(th->syn) p += snprintf(p, sizeof(buff) - (p - buff), "S");
+		if(th->rst) p += snprintf(p, sizeof(buff) - (p - buff), "R");
+		if(th->ack) p += snprintf(p, sizeof(buff) - (p - buff), ".");
+		if(th->psh) p += snprintf(p, sizeof(buff) - (p - buff), "P");
+		if(th->urg) p += snprintf(p, sizeof(buff) - (p - buff), "U");
+		if(th->ece) p += snprintf(p, sizeof(buff) - (p - buff), "E");
+		if(th->cwr) p += snprintf(p, sizeof(buff) - (p - buff), "C");
+
+		p += snprintf(p, sizeof(buff) - (p - buff), "] window[%04x] ", th->window);
+		ct = nf_ct_get(skb, &ctinfo);
+		if (ct){
+			if((ct->status & IPS_NAT_MASK) == IPS_SRC_NAT)
+				p += snprintf(p, sizeof(buff) - (p - buff), " [SNAT] ");
+			if((ct->status & IPS_NAT_MASK) == IPS_DST_NAT)
+				p += snprintf(p, sizeof(buff) - (p - buff), " [DNAT] ");
+		}
+		printf("%s\n", buff);
+		p = buff;
+		if(dlen >= HTTP_MIN_LEN && skb->data_len == 0) {
+			dlen = dlen > line_len * 4 ? line_len * 4 : dlen;
+			pos = (char *)th + th->doff * 4;
+			while (dlen) {
+				llen = dlen > line_len ? line_len : dlen;
+				p += snprintf(p, sizeof(buff) - (p - buff), "    ");
+				for (i = 0; i < llen; i++)
+					p += snprintf(p, sizeof(buff) - (p - buff), " %02x", pos[i]);
+				for (i = llen; i < line_len; i++)
+					p += snprintf(p, sizeof(buff) - (p - buff), "   ");
+				p += snprintf(p, sizeof(buff) - (p - buff), "   ");
+				for (i = 0; i < llen; i++) {
+					if (isprint(pos[i]))
+						p += snprintf(p, sizeof(buff) - (p - buff), "%c", pos[i]);
+					else
+						p += snprintf(p, sizeof(buff) - (p - buff), "*");
+				}
+				for (i = llen; i < line_len; i++)
+					p += snprintf(p, sizeof(buff) - (p - buff), " ");
+				printf("%s\n", buff);
+				p = buff;
+				pos += llen;
+				dlen -= llen;
+			}
+		}
+	}
+#endif
+}
+
 
 
 size_t get_vlan_offset(struct ether_hdr *eth_hdr, uint16_t *proto) {
