@@ -505,6 +505,7 @@ app_init_nics(void)
 	check_all_ports_link_status(APP_MAX_NIC_PORTS, (~0x0));
 }
 
+#if 0
 static void app_init_conn_tab(void){
 	unsigned lcore;
 
@@ -529,7 +530,27 @@ static void app_init_conn_tab(void){
 		lp_worker->app_conn_count[1] = 0;
 	}
 }
+#endif
 
+static void app_init_protocol(void) {
+
+	char protocols[64];
+#define REGISTER_PROTOCOL(p)            \
+    do {                    \
+        register_app_protocol(p); \
+        strcat(protocols, ", ");    \
+        strcat(protocols, (p)->name);   \
+    } while (0)
+
+    protocols[0] = '\0';
+    protocols[2] = '\0';
+#ifdef CONFIG_APP_PROTO_TCP 
+    REGISTER_PROTOCOL(&app_protocol_tcp); 
+#endif 
+#ifdef CONFIG_APP_PROTO_UDP 
+    REGISTER_PROTOCOL(&app_protocol_udp); 
+#endif
+}
 /* timer callback */
 static void
 app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
@@ -547,7 +568,7 @@ static void app_init_worker(void){
 	uint64_t hz;
 	int ret;
 	int socket;
-	uint64_t frag_cycles;
+	uint64_t cycles;
 
 	hz = rte_get_timer_hz();
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
@@ -558,21 +579,35 @@ static void app_init_worker(void){
 			continue;
 		}
 
+		socket = rte_lcore_to_socket_id(lcore);
+
 		/* timer */
 		ret = rte_timer_reset(&lp_worker->app_timer, hz*60, PERIODICAL, lcore, app_timer_cb, lp_worker);
 		printf("ret_timer_reset lcore:%d ret:%d\n", lcore, ret);
 
-		/* frag */
-		socket = rte_lcore_to_socket_id(lcore);
-		frag_cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_FLOW_TTL;
+		/* frag table*/
+		cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_FLOW_TTL;
 		if ((lp_worker->frag_tbl = rte_ip_frag_table_create(DEF_FLOW_NUM,
-				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, frag_cycles,
+				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, cycles,
 				socket)) == NULL) {
 			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
 				DEF_FLOW_NUM, lcore);
 		}
+
+		/* connction table */
+		cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_FLOW_TTL;
+		if ((lp_worker->conn_tbl = rte_conn_table_create(DEF_FLOW_NUM,
+				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, cycles,
+				socket)) == NULL) {
+			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
+				DEF_FLOW_NUM, lcore);
+		}
+
+
 	}
 }
+
+
 
 void
 app_init(void)
@@ -583,8 +618,8 @@ app_init(void)
 	app_init_rings_rx();
 	app_init_rings_tx();
 	app_init_nics();
-	//app_init_protocol();
-	app_init_conn_tab();
+	app_init_protocol();
+	//app_init_conn_tab();
 	app_init_worker();
 	printf("Initialization completed.\n");
 }

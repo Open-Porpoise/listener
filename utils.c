@@ -153,5 +153,6 @@ uint32_t xmit_l34_hash32(const struct rte_mbuf *buf) {
 	hash ^= hash >> 16;
 	hash ^= hash >> 8;
 
+	buf->hash = hash;
 	return hash;
 }

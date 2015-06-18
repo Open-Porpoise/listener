@@ -47,6 +47,8 @@
 #include <rte_timer.h>
 #include "geolocation.h"
 
+#define CONFIG_APP_PROTO_TCP
+#define CONFIG_APP_PROTO_UDP
 
 /* ip reassebly */
 #define PREFETCH_OFFSET 3
@@ -353,17 +355,27 @@ struct app_lcore_params_worker {
 
 	/* ip fragment */
 	struct rte_ip_frag_tbl *frag_tbl;
-	struct rte_ip_frag_death_row death_row;
+	struct rte_ip_frag_death_row frag_dr;
+
+	/* connction */
+	struct rte_conn_tbl *conn_tbl;
+	struct rte_conn_death_row conn_dr;
 
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
-	uint8_t *app_conn_tab;
-	uint32_t app_conn_count[2];
+	//uint8_t *app_conn_tab;
+	//uint32_t app_conn_count[2];
 	struct rte_timer app_timer;
+
+
+	/* counter */
 	uint32_t app_frag_count;
 	uint32_t app_unknow_count;
 	uint32_t app_vlan_count;
+	uint32_t app_pkt_count;
+	uint64_t app_bytes_count;
 };
+
 
 struct app_lcore_params {
 	union {
@@ -452,25 +464,6 @@ enum {
 };
 
 
-struct app_protocol {
-	struct app_protocol	*next;
-	char		*name;
-	uint16_t			protocol;
-	uint16_t			num_states;
-	int			dont_defrag;
-	//rte_atomic32_t		appcnt;		/* counter of proto app incs */
-	int			*timeout_table;	/* protocol timeout table */
-
-	void (*init)(struct app_protocol *pp);
-
-	const char *(*state_name)(int state);
-
-	void (*timeout_change)(struct app_protocol *pp, int flags);
-
-	int (*set_state_timeout)(struct app_protocol *pp, char *sname, int to);
-};
-
-
 extern struct app_params app;
 
 int app_parse_args(int argc, char **argv);
@@ -488,7 +481,7 @@ void app_print_params(void);
 
 
 int  app_init_protocol(void);
-void deal_pkt(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt, uint64_t tms);
+void process_mbuf(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt, uint64_t tms);
 void app_worker_counter_reset(uint32_t lcore_id, 
 		struct app_lcore_params_worker *lp_worker);
 
