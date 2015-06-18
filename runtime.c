@@ -566,7 +566,7 @@ static void app_lcore_main_loop_worker(void) {
 		app_lcore_worker(lp, bsz_rd, cur_tsc);
 
 		rte_ip_frag_free_death_row(&lp->frag_dr, PREFETCH_OFFSET);
-		rte_conn_free_death_row(&lp->conn_dr, PREFETCH_OFFSET);
+		//rte_conn_free_death_row(&lp->conn_dr, PREFETCH_OFFSET);
 
 		i ++;
 	}

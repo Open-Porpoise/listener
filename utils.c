@@ -107,7 +107,7 @@ size_t get_vlan_offset(struct ether_hdr *eth_hdr, uint16_t *proto) {
 	return vlan_offset;
 }
 
-uint32_t xmit_l34_hash32(const struct rte_mbuf *buf) {
+uint32_t xmit_l34_hash32(struct rte_mbuf *buf) {
 	struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(buf, struct ether_hdr *);
 	uint16_t proto = eth_hdr->ether_type;
 	size_t vlan_offset = get_vlan_offset(eth_hdr, &proto);
@@ -153,6 +153,6 @@ uint32_t xmit_l34_hash32(const struct rte_mbuf *buf) {
 	hash ^= hash >> 16;
 	hash ^= hash >> 8;
 
-	buf->hash = hash;
+	buf->hash.usr = hash;
 	return hash;
 }

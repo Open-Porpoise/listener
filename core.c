@@ -7,22 +7,24 @@
 
 #define	PRIME_VALUE	0xeaad8405
 
-
+#if 0
 static uint32_t app_conn_hashkey(uint32_t s_addr, uint16_t s_port, 
 		uint32_t d_addr, uint16_t d_port){
 	return rte_jhash_3words(s_addr, d_addr, s_port << 16 | d_port, PRIME_VALUE);
 }
+#endif
 
 void process_mbuf(struct app_lcore_params_worker *lp,
 		struct rte_mbuf *m, uint64_t tms){
 	struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
 	uint16_t proto = eth_hdr->ether_type;
 	size_t vlan_offset = get_vlan_offset(eth_hdr, &proto);
+	size_t ip_hdr_offset;
 
-	struct udp_hdr *udp_hdr = NULL;
-	uint32_t hash;
+	//struct udp_hdr *udp_hdr = NULL;
+	//uint32_t hash;
 	uint32_t from_client = 0;
-	//struct app_protocol *pp;
+	struct app_protocol *pp;
 	struct app_conn *cp;
 	if(vlan_offset){
 		lp->app_vlan_count++;
@@ -30,6 +32,8 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 
 	if (lp && rte_cpu_to_be_16(ETHER_TYPE_IPv4) == proto) {
 		struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr *)((char *)(eth_hdr + 1) + vlan_offset);
+		ip_hdr_offset = (ipv4_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
+				IPV4_IHL_MULTIPLIER;
 
 
 		 /* if it is a fragmented packet, then try to reassemble. */
@@ -67,7 +71,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		if (unlikely(!pp))
 			 goto out;
 
-		if((cp = pp->conn_get(pp, lp->conn_tbl, m, tms, ipv4_hdr, &from_client)) == NULL){
+		if((cp = pp->conn_get(pp, lp->conn_tbl, m, tms, ipv4_hdr, ip_hdr_offset, &from_client)) == NULL){
 			goto out;
 		}
 

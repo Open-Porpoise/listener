@@ -16,17 +16,11 @@
 #include <rte_byteorder.h>
 #include "main.h"
 
-enum {
-	IP_LAST_CONN_IDX,    /**< index of last connment */
-	IP_FIRST_CONN_IDX,   /**< index of first connment */
-	IP_MIN_CONN_NUM,     /**< minimum number of connments */
-	IP_MAX_CONN_NUM = RTE_LIBRTE_CONN_MAX_CONN,
-	/**< maximum number of connments per packet */
-};
-
 /* app_conn flags */
 #define	F_CONN_IN_IDX	0x0001
 #define	F_CONN_OUT_IDX	0x0002
+
+#define	APP_CONN_HASH_FNUM	2
 
 /** @internal <src addr, dst_addr, id> to uniquely indetify connection datagram. */
 struct app_conn_key {
@@ -46,9 +40,9 @@ struct app_conn;
 
 struct app_conn_stream {
 	uint32_t flags;
-	struct conn_key key;
+	struct app_conn_key key;
 	struct app_conn *cp;
-}
+};
 
 /*
  * @internal connection packet to reassemble.
@@ -74,14 +68,16 @@ struct app_conn {
 #define	APP_CONN_TBL_STAT_UPDATE(s, f, v)	do {} while (0)
 #endif
 
+#if 0
 /** mbuf death row (packets to be freed) */
 struct rte_conn_death_row {
 	uint32_t cnt;          /**< number of mbufs currently on death row */
 	struct rte_mbuf *row[conn_DEATH_ROW_LEN * (IP_MAX_CONN_NUM + 1)];
 	/**< mbufs to be freed */
 };
+#endif
 
-TAILQ_HEAD(ip_pkt_list, conn_pkt); /**< @internal connments tailq */
+//TAILQ_HEAD(ip_pkt_list, conn_pkt); /**< @internal connments tailq */
 
 /** connection table statistics */
 struct conn_tbl_stat {
@@ -103,7 +99,7 @@ struct app_conn_tbl {
 	uint32_t             nb_entries;      /**< total size of the table. */
 	uint32_t             nb_buckets;      /**< num of associativity lines. */
 	struct conn_pkt *last;         /**< last used entry. */
-	struct ip_pkt_list lru;           /**< LRU list for table entries. */
+	//struct ip_pkt_list lru;           /**< LRU list for table entries. */
 	struct conn_tbl_stat stat;     /**< statistics counters. */
 	struct app_conn conn[0];        /**< hash table. */
 };
@@ -127,7 +123,7 @@ struct app_conn_tbl {
  * @return
  *   The pointer to the new allocated connection table, on success. NULL on error.
  */
-struct app_conn_tbl * rte_conn_table_create(uint32_t bucket_num,
+struct app_conn_tbl * app_conn_table_create(uint32_t bucket_num,
 		uint32_t bucket_entries,  uint32_t max_entries,
 		uint64_t max_cycles, int socket_id);
 
@@ -181,8 +177,8 @@ int32_t rte_ipv4_connment_packet(struct rte_mbuf *pkt_in,
  * @param prefetch
  *   How many buffers to prefetch before freeing.
  */
-void rte_conn_free_death_row(struct rte_conn_death_row *dr,
-		uint32_t prefetch);
+//void rte_conn_free_death_row(struct rte_conn_death_row *dr,
+//		uint32_t prefetch);
 
 
 /*
@@ -208,21 +204,23 @@ struct app_protocol {
 			struct app_conn_tbl *tbl,
 			struct rte_mbuf *mb, 
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
-			uint32_t *from_client);
+			size_t ip_hdr_offset, uint32_t *from_client);
 
 	void (*process_handle)(struct app_protocol *pp,
-			static struct app_conn * cp, struct rte_mbuf *mb, 
-			uint64_t tms, struct ipv4_hdr *ip_hdr, uint32_t *from_client);
+			struct app_conn *cp, struct rte_mbuf *mb, 
+			uint64_t tms, struct ipv4_hdr *ip_hdr, 
+			size_t ip_hdr_offset, uint32_t from_client);
+
 	void (*debug_packet)(struct app_protocol *pp,
 				const struct rte_mbuf *mbuf, void *ip_hdr, 
 				const char *msg);
 
-}
+	void (*conn_expire_handle)(struct app_protocol *pp, struct app_conn *cp);
 
-void app_tcpudp_debug_packet(struct app_protocol *pp,
-				const struct rte_mbuf *mbuf, void *ip_hdr, 
-	 			const char *msg);
+};
 
+int register_app_protocol(struct app_protocol *pp);
+struct app_protocol *app_proto_get(unsigned short proto);
 extern struct app_protocol app_protocol_tcp;
 extern struct app_protocol app_protocol_udp;
 

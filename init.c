@@ -595,12 +595,12 @@ static void app_init_worker(void){
 		}
 
 		/* connction table */
-		cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_FLOW_TTL;
-		if ((lp_worker->conn_tbl = rte_conn_table_create(DEF_FLOW_NUM,
-				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, cycles,
+		cycles = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S * DEF_CONN_TTL;
+		if ((lp_worker->conn_tbl = app_conn_table_create(DEF_CONN_NUM,
+				APP_CONN_TBL_BUCKET_ENTRIES, DEF_CONN_NUM, cycles,
 				socket)) == NULL) {
 			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
-				DEF_FLOW_NUM, lcore);
+				DEF_CONN_NUM, lcore);
 		}
 
 

@@ -46,9 +46,21 @@
 
 #include <rte_timer.h>
 #include "geolocation.h"
+#include "conn.h"
 
 #define CONFIG_APP_PROTO_TCP
 #define CONFIG_APP_PROTO_UDP
+
+/* conn */
+
+#define	MAX_CONN_NUM	UINT32_MAX
+#define	MIN_CONN_NUM	1
+#define	DEF_CONN_NUM	0x1000
+#define	APP_CONN_TBL_BUCKET_ENTRIES	16
+#define	MAX_CONN_TTL	(3600 * MS_PER_S)
+#define	MIN_CONN_TTL	1
+#define	DEF_CONN_TTL	(7 * MS_PER_S)
+
 
 /* ip reassebly */
 #define PREFETCH_OFFSET 3
@@ -358,13 +370,13 @@ struct app_lcore_params_worker {
 	struct rte_ip_frag_death_row frag_dr;
 
 	/* connction */
-	struct rte_conn_tbl *conn_tbl;
-	struct rte_conn_death_row conn_dr;
+	struct app_conn_tbl *conn_tbl;
+//	struct rte_conn_death_row conn_dr;
 
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
 	//uint8_t *app_conn_tab;
-	//uint32_t app_conn_count[2];
+	uint32_t app_conn_count[2];
 	struct rte_timer app_timer;
 
 
@@ -480,7 +492,6 @@ uint32_t app_get_lcores_worker(void);
 void app_print_params(void);
 
 
-int  app_init_protocol(void);
 void process_mbuf(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt, uint64_t tms);
 void app_worker_counter_reset(uint32_t lcore_id, 
 		struct app_lcore_params_worker *lp_worker);
