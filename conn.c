@@ -69,7 +69,7 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 	tbl->bucket_entries = bucket_entries;
 	tbl->entry_mask = (tbl->nb_entries - 1) & ~(tbl->bucket_entries  - 1);
 
-	//TAILQ_INIT(&(tbl->lru));
+	TAILQ_INIT(&(tbl->lru));
 	return (tbl);
 }
 
@@ -126,7 +126,7 @@ app_conn_tbl_del(struct app_conn_tbl *tbl,
 {
 	//ip_frag_free(fp, dr);
 	app_conn_key_invalidate(&cp->stream[0].key);
-	//TAILQ_REMOVE(&tbl->lru, fp, lru);
+	TAILQ_REMOVE(&tbl->lru, cp, lru);
 	tbl->use_entries--;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, del_num, 1);
 }
@@ -200,7 +200,7 @@ ipv4_conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 			return (p1 + i);
 		} else if (app_conn_key_is_empty(&p1[i].stream[0].key))
 			empty = (empty == NULL) ? (p1 + i) : empty;
-		else if (max_cycles + p1[i].start < tms)
+		else if (max_cycles + p1[i].last < tms)
 			old = (old == NULL) ? (p1 + i) : old;
 /*
 		if (p2->key.key_len == IPV4_KEYLEN)
@@ -222,7 +222,7 @@ ipv4_conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 			return (p2 + i);
 		} else if (app_conn_key_is_empty(&p2[i].stream[0].key))
 			empty = (empty == NULL) ? (p2 + i) : empty;
-		else if (max_cycles + p2[i].start < tms)
+		else if (max_cycles + p2[i].last < tms)
 			old = (old == NULL) ? (p2 + i) : old;
 	}
 
@@ -231,11 +231,24 @@ ipv4_conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 	return (NULL);
 }
 
-static inline void
+/* reset the fragment */
+static void
+stream_reset(struct app_conn_stream *sp, uint64_t tms)
+{
+	sp->start = tms;
+	sp->last = tms;
+	sp->bytes = 0;
+	sp->pkts = 0;
+}
+
+
+static void
 app_conn_tbl_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
-	const struct app_conn_key *key, __attribute__((unused))uint64_t tms)
+	const struct app_conn_key *key, uint64_t tms)
 {
 	/* todo: reset conn counter */
+	//memset(cp->stream, 0, sizeof(struct app_conn_stream) * 2);
+	cp->last = tms;
 	cp->stream[0].key = key[0];
 	cp->stream[1].key.addr[0] = key->addr[1];
 	cp->stream[1].key.addr[1] = key->addr[0];
@@ -243,8 +256,9 @@ app_conn_tbl_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->stream[1].key.port[1] = key->addr[0];
 	cp->stream[1].key.proto = key->proto;
 
-	//ip_frag_reset(fp, tms);
-	//TAILQ_INSERT_TAIL(&tbl->lru, fp, lru);
+	stream_reset(&cp->stream[0], tms);
+	stream_reset(&cp->stream[1], tms);
+	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 	tbl->use_entries++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, add_num, 1);
 }
@@ -254,14 +268,14 @@ app_conn_tbl_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
  * Find an entry in the table for the corresponding fragment.
  * If such entry is not present, then allocate a new one.
  * If the entry is stale, then free and reuse it.
+ * just fro tcp
  */
 static struct app_conn *
 ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		struct app_conn_tbl *tbl, const struct app_conn_key *key, 
 		uint64_t tms, uint32_t *from_client, uint8_t tcp_flags)
 {
-	struct app_conn *cp, *free, *stale;
-	//*lru;
+	struct app_conn *cp, *free, *stale, *lru;
 	uint64_t max_cycles;
 
 	/*
@@ -276,7 +290,7 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 
 		/*timed-out entry, free and invalidate it*/
 		if (stale != NULL) {
-			pp->conn_expire_handle(pp, stale);
+			pp->report_handle(pp, tbl, stale);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
 
@@ -287,15 +301,14 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		 */
 		} else if (free != NULL &&
 				tbl->max_entries <= tbl->use_entries) {
-			//lru = TAILQ_FIRST(&tbl->lru);
-#if 0
-			if (max_cycles + lru->start < tms) {
-				//app_conn_tbl_del(tbl, lru);
+			lru = TAILQ_FIRST(&tbl->lru);
+			if (max_cycles + lru->last < tms) {
+				//ip_frag_tbl_del(tbl, lru);
+				app_conn_tbl_del(tbl, lru);
 			} else {
 				free = NULL;
 				APP_CONN_TBL_STAT_UPDATE(&tbl->stat, fail_nospace, 1);
 			}
-#endif
 		}
 
 		/* found a free entry to reuse. */
@@ -310,7 +323,8 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 	 * so free associated resources, reposition it in the LRU list,
 	 * and reuse it.
 	 */
-	} else if (max_cycles + cp->start < tms) {
+	} else if (max_cycles + cp->last < tms) {
+		//ip_frag_tbl_reuse(tbl, cp, tms);
 		//app_conn_tbl_reuse(tbl, cp, tms);
 	}
 
@@ -410,7 +424,7 @@ struct app_protocol *app_proto_get(unsigned short proto)
 }
 
 static void
-app_tcpudp_debug_packet_v4(struct app_protocol *pp,
+tcpudp_debug_packet_v4(struct app_protocol *pp,
                  __attribute__((unused))const struct rte_mbuf *mb,
                  struct ipv4_hdr *ih, const char *msg)
 {
@@ -436,45 +450,86 @@ app_tcpudp_debug_packet_v4(struct app_protocol *pp,
     RTE_LOG(DEBUG, USER1, "%s: %s\n", msg, buf);
 } 
 
-static void app_tcpudp_debug_packet(struct app_protocol *pp,
+static void tcpudp_debug_packet(struct app_protocol *pp,
 				const struct rte_mbuf *mbuf, void *ip_hdr, 
 				const char *msg) {  
 	//todo add v6
-	app_tcpudp_debug_packet_v4(pp, mbuf, (struct ipv4_hdr *)ip_hdr, msg);
+	tcpudp_debug_packet_v4(pp, mbuf, (struct ipv4_hdr *)ip_hdr, msg);
 }
 
 
-static void tcp_process_handler(__attribute__((unused))struct app_protocol *pp, 
-		struct app_conn * cp, struct rte_mbuf *mb, 
+static void tcp_process_handle(__attribute__((unused))struct app_protocol *pp, 
+		struct app_conn_tbl *tbl,
+		struct app_conn * cp, __attribute__((unused))struct rte_mbuf *mb, 
 		uint64_t tms, struct ipv4_hdr *ip_hdr, 
-		size_t ip_hdr_offset, uint32_t from_client){
+		__attribute__((unused))size_t ip_hdr_offset, uint32_t from_client){
+	struct app_conn_stream *sp;
 	//struct tcp_hdr *tcp_hdr = NULL;
 	//tcp_hdr = (struct tcp_hdr *)((char *)ipv4_hdr + ip_hdr_offset);
-	if (pp && cp && mb && ip_hdr && ip_hdr_offset && from_client && tms)
-		return;
+	sp = cp->stream;
+	if(!from_client){
+		sp++;
+	}
+
+	// todo: seq / ack 
+	// todo: stat 
+
+	// process 
+	sp->bytes += ip_hdr->total_length;
+	sp->pkts++;
+
+
+	if(cp->state == TCP_CLOSE){
+		pp->report_handle(pp, tbl, cp);
+	}
+
+	// update timer and lru
+	sp->last = tms;
+	cp->last = tms;
+	TAILQ_REMOVE(&tbl->lru, cp, lru);
+	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 }
 
-static  void tcp_conn_expire_handler(struct app_protocol *pp, struct app_conn *cp) {
+static  void tcpudp_report_handle(struct app_protocol *pp, 
+		struct app_conn_tbl *tbl, struct app_conn *cp) {
+	if (tbl->nu_log < 100){
+		printf("%s %pI4:%u->%pI4:%u tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u", 
+				pp->name, 
+				&cp->stream[0].key.addr[0], cp->stream[0].key.port[0], 
+				&cp->stream[0].key.addr[1], cp->stream[0].key.port[1], 
+				cp->stream[0].bytes, cp->stream[0].pkts,
+				cp->stream[1].bytes, cp->stream[1].pkts);
+		tbl->nu_log ++;
+	}
+	return;
+}
+
+#if 0
+static  void tcp_conn_expire_handle(struct app_protocol *pp, struct app_conn *cp) {
 	if (pp && cp ){
 		return;
 	}
 	return;
 }
+#endif
 
-static void udp_process_handler(struct app_protocol *pp, 
+static void udp_process_handle(__attribute__((unused))struct app_protocol *pp, 
+		struct app_conn_tbl *tbl,
 		struct app_conn * cp, struct rte_mbuf *mb, 
 		uint64_t tms, struct ipv4_hdr *ip_hdr, 
 		size_t ip_hdr_offset, uint32_t from_client){
-	if (pp && cp && mb && ip_hdr && ip_hdr_offset && from_client && tms)
+	if (pp && tbl && cp && mb && ip_hdr && ip_hdr_offset && from_client && tms)
 		return;
 }
 
-static void udp_conn_expire_handler(struct app_protocol *pp, struct app_conn *cp) {
+#if 0
+static void udp_conn_expire_handle(struct app_protocol *pp, struct app_conn *cp) {
 	if (pp && cp ){
 		return;
 	}
 	return;
 }
+#endif
 
 /* protocol tcp */
 struct app_protocol app_protocol_tcp = {
@@ -483,9 +538,10 @@ struct app_protocol app_protocol_tcp = {
 	//.init = app_tcp_init,
 	.init = NULL,
 	.conn_get = ipv4_tcp_conn_get,
-	.debug_packet = app_tcpudp_debug_packet,
-	.process_handle = tcp_process_handler,
-	.conn_expire_handle = tcp_conn_expire_handler,
+	.debug_packet = tcpudp_debug_packet,
+	.process_handle = tcp_process_handle,
+	.report_handle = tcpudp_report_handle,
+//	.conn_expire_handle = tcp_conn_expire_handle,
 }; 
 
 struct app_protocol app_protocol_udp = {
@@ -493,7 +549,8 @@ struct app_protocol app_protocol_udp = {
 	.protocol = IPPROTO_UDP,              
 	.init = NULL,               
 	.conn_get = ipv4_tcp_conn_get,       
-	.debug_packet = app_tcpudp_debug_packet,
-	.process_handle = udp_process_handler,
-	.conn_expire_handle = udp_conn_expire_handler,
+	.debug_packet = tcpudp_debug_packet,
+	.process_handle = udp_process_handle,
+	.report_handle = tcpudp_report_handle,
+//	.conn_expire_handle = udp_conn_expire_handle,
 }; 

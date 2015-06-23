@@ -35,32 +35,9 @@ struct app_conn_key {
 	uint8_t proto;
 };
 
-
-struct app_conn;
-
-struct app_conn_stream {
-	uint32_t flags;
-	struct app_conn_key key;
-	struct app_conn *cp;
-};
-
-/*
- * @internal connection packet to reassemble.
- * First two entries in the conns[] array are for the last and first connments.
- */
-struct app_conn {
-	//TAILQ_ENTRY(conn_pkt) lru;   /**< LRU list */
-	uint64_t start;       /**< creation timestamp */
-	uint64_t last;       /**< last update timestamp */
-	uint32_t state;
-	uint64_t rx_bytes;
-	uint64_t tx_bytes;
-	uint32_t rx_pkts;
-	uint32_t tx_pkts;
-	struct app_conn_stream stream[2];
-} __rte_cache_aligned;
-
 #define conn_DEATH_ROW_LEN 32 /**< death row size (in packets) */
+
+struct app_lcore_params_worker;
 
 #ifdef APP_CONN_TBL_STAT
 #define	APP_CONN_TBL_STAT_UPDATE(s, f, v)	((s)->f += (v))
@@ -77,7 +54,43 @@ struct rte_conn_death_row {
 };
 #endif
 
-//TAILQ_HEAD(ip_pkt_list, conn_pkt); /**< @internal connments tailq */
+//TAILQ_HEAD(ip_pkt_list, ip_frag_pkt); /**< @internal connments tailq */
+TAILQ_HEAD(app_conn_list, app_conn); /**< @internal connments tailq */
+
+struct app_conn;
+
+struct app_conn_stream {
+	uint32_t flags;
+	struct app_conn_key key;
+	uint64_t bytes;
+	uint32_t pkts;
+	uint64_t start;       /**< creation timestamp */
+	uint64_t last;       /**< last update timestamp */
+
+	int32_t urg_count;
+	uint32_t acked;
+	uint32_t seq;
+	uint32_t ack_seq;
+	uint32_t first_data_seq;
+	uint8_t urgdata;
+	uint8_t count_new_urg;
+	uint8_t urg_seen;
+	uint32_t urg_ptr;
+	uint16_t window;
+	uint8_t ts_on;
+	uint8_t wscale_on;
+	uint32_t curr_ts; 
+	uint32_t wscale;
+	struct app_conn *cp;
+};
+
+struct app_conn {
+	TAILQ_ENTRY(app_conn) lru;   /**< LRU list */
+	uint64_t last;       /**< creation timestamp */
+	uint32_t state;
+	struct app_conn_stream stream[2];
+} __rte_cache_aligned;
+
 
 /** connection table statistics */
 struct conn_tbl_stat {
@@ -98,8 +111,9 @@ struct app_conn_tbl {
 	uint32_t             bucket_entries;  /**< hash assocaitivity. */
 	uint32_t             nb_entries;      /**< total size of the table. */
 	uint32_t             nb_buckets;      /**< num of associativity lines. */
+	uint32_t             nu_log;	      /**< num of log lines. */
 	struct conn_pkt *last;         /**< last used entry. */
-	//struct ip_pkt_list lru;           /**< LRU list for table entries. */
+	struct app_conn_list lru;           /**< LRU list for table entries. */
 	struct conn_tbl_stat stat;     /**< statistics counters. */
 	struct app_conn conn[0];        /**< hash table. */
 };
@@ -200,24 +214,49 @@ struct app_protocol {
 	void (*init) (struct app_protocol * pp);
 
     struct app_conn *                    
-        (*conn_get) (struct app_protocol *pp ,
+        (*conn_get) (struct app_protocol *pp,
 			struct app_conn_tbl *tbl,
 			struct rte_mbuf *mb, 
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
 			size_t ip_hdr_offset, uint32_t *from_client);
 
-	void (*process_handle)(struct app_protocol *pp,
+	void (*process_handle)(struct app_protocol *pp, 
+			struct app_conn_tbl *tbl,
 			struct app_conn *cp, struct rte_mbuf *mb, 
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
 			size_t ip_hdr_offset, uint32_t from_client);
 
 	void (*debug_packet)(struct app_protocol *pp,
-				const struct rte_mbuf *mbuf, void *ip_hdr, 
-				const char *msg);
+			const struct rte_mbuf *mbuf, void *ip_hdr, 
+			const char *msg);
 
-	void (*conn_expire_handle)(struct app_protocol *pp, struct app_conn *cp);
+	void (*report_handle)(struct app_protocol *pp,
+			struct app_conn_tbl *tbl,
+			struct app_conn *cp);
+#if 0
+	void (*conn_expire_handle)(struct app_protocol *pp, 
+			struct app_conn_tbl *tbl,
+			struct app_conn *cp);
+#endif
 
 };
+
+enum {
+	TCP_ESTABLISHED = 1,
+	TCP_SYN_SENT,
+	TCP_SYN_RECV,
+	TCP_FIN_WAIT1,
+	TCP_FIN_WAIT2,
+	TCP_TIME_WAIT,
+	TCP_CLOSE,
+	TCP_CLOSE_WAIT,
+	TCP_LAST_ACK,
+	TCP_LISTEN,
+	TCP_CLOSING,	/* Now a valid state */
+
+	TCP_MAX_STATES	/* Leave at the end! */
+};
+
 
 int register_app_protocol(struct app_protocol *pp);
 struct app_protocol *app_proto_get(unsigned short proto);
