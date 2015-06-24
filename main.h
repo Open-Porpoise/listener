@@ -60,6 +60,7 @@
 #define	MAX_CONN_TTL	(3600 * MS_PER_S)
 #define	MIN_CONN_TTL	1
 #define	DEF_CONN_TTL	(7 * MS_PER_S)
+#define	DEF_RPT_TTL	(60 * MS_PER_S)
 
 
 /* ip reassebly */

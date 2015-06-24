@@ -32,7 +32,7 @@ rte_conn_free_death_row(struct rte_conn_death_row *dr,
 /* create  table */
 struct app_conn_tbl *
 app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
-	uint32_t max_entries, uint64_t max_cycles, int socket_id)
+	uint32_t max_entries, uint64_t max_cycles, uint64_t rpt_cycles, int socket_id)
 {
 	struct app_conn_tbl *tbl;
 	size_t sz;
@@ -63,6 +63,7 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 		__func__, sz, socket_id);
 
 	tbl->max_cycles = max_cycles;
+	tbl->rpt_cycles = rpt_cycles;
 	tbl->max_entries = max_entries;
 	tbl->nb_entries = (uint32_t)nb_entries;
 	tbl->nb_buckets = bucket_num;
@@ -70,6 +71,7 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 	tbl->entry_mask = (tbl->nb_entries - 1) & ~(tbl->bucket_entries  - 1);
 
 	TAILQ_INIT(&(tbl->lru));
+	TAILQ_INIT(&(tbl->rpt));
 	return (tbl);
 }
 
@@ -127,6 +129,7 @@ app_conn_tbl_del(struct app_conn_tbl *tbl,
 	//ip_frag_free(fp, dr);
 	app_conn_key_invalidate(&cp->stream[0].key);
 	TAILQ_REMOVE(&tbl->lru, cp, lru);
+	TAILQ_REMOVE(&tbl->rpt, cp, rpt);
 	tbl->use_entries--;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, del_num, 1);
 }
@@ -244,11 +247,13 @@ stream_reset(struct app_conn_stream *sp, uint64_t tms)
 
 static void
 app_conn_tbl_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
-	const struct app_conn_key *key, uint64_t tms)
+	const struct app_conn_key *key, uint64_t tms, struct app_protocol *pp)
 {
 	/* todo: reset conn counter */
 	//memset(cp->stream, 0, sizeof(struct app_conn_stream) * 2);
 	cp->last = tms;
+	cp->start = tms;
+	cp->pp = pp;
 	cp->stream[0].key = key[0];
 	cp->stream[1].key.addr[0] = key->addr[1];
 	cp->stream[1].key.addr[1] = key->addr[0];
@@ -259,6 +264,7 @@ app_conn_tbl_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	stream_reset(&cp->stream[0], tms);
 	stream_reset(&cp->stream[1], tms);
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
+	TAILQ_INSERT_TAIL(&tbl->rpt, cp, rpt);
 	tbl->use_entries++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, add_num, 1);
 }
@@ -290,7 +296,7 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 
 		/*timed-out entry, free and invalidate it*/
 		if (stale != NULL) {
-			pp->report_handle(pp, tbl, stale);
+			pp->report_handle(tbl, stale, tms);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
 
@@ -313,7 +319,7 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 
 		/* found a free entry to reuse. */
 		if (free != NULL && (tcp_flags & TCP_FLAG_ALL) == TCP_SYN_FLAG) {
-			app_conn_tbl_add(tbl,  free, key, tms);
+			app_conn_tbl_add(tbl,  free, key, tms, pp);
 			//ip_frag_tbl_add(tbl,  free, key, tms);
 			cp = free;
 		}
@@ -451,16 +457,19 @@ tcpudp_debug_packet_v4(struct app_protocol *pp,
 } 
 
 static void tcpudp_debug_packet(struct app_protocol *pp,
-				const struct rte_mbuf *mbuf, void *ip_hdr, 
-				const char *msg) {  
+		const struct rte_mbuf *mbuf, void *ip_hdr, 
+		const char *msg) {  
 	//todo add v6
 	tcpudp_debug_packet_v4(pp, mbuf, (struct ipv4_hdr *)ip_hdr, msg);
 }
+/*
+static void tcp_process(struct app_protocol *pp, struct app_conn *cp){
 
-
-static void tcp_process_handle(__attribute__((unused))struct app_protocol *pp, 
+}
+*/
+static void tcp_process_handle(
 		struct app_conn_tbl *tbl,
-		struct app_conn * cp, __attribute__((unused))struct rte_mbuf *mb, 
+		struct app_conn *cp, __attribute__((unused))struct rte_mbuf *mb, 
 		uint64_t tms, struct ipv4_hdr *ip_hdr, 
 		__attribute__((unused))size_t ip_hdr_offset, uint32_t from_client){
 	struct app_conn_stream *sp;
@@ -472,7 +481,7 @@ static void tcp_process_handle(__attribute__((unused))struct app_protocol *pp,
 	}
 
 	// todo: seq / ack 
-	// todo: stat 
+	// todo: cp->state  cp->stream[0/1].state
 
 	// process 
 	sp->bytes += ip_hdr->total_length;
@@ -480,7 +489,7 @@ static void tcp_process_handle(__attribute__((unused))struct app_protocol *pp,
 
 
 	if(cp->state == TCP_CLOSE){
-		pp->report_handle(pp, tbl, cp);
+		cp->pp->report_handle(tbl, cp, tms);
 	}
 
 	// update timer and lru
@@ -490,15 +499,22 @@ static void tcp_process_handle(__attribute__((unused))struct app_protocol *pp,
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 }
 
-static  void tcpudp_report_handle(struct app_protocol *pp, 
-		struct app_conn_tbl *tbl, struct app_conn *cp) {
+static  void tcpudp_report_handle(struct app_conn_tbl *tbl, 
+		struct app_conn *cp, uint64_t tms) {
 	if (tbl->nu_log < 100){
 		printf("%s %pI4:%u->%pI4:%u tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u", 
-				pp->name, 
+				cp->pp->name, 
 				&cp->stream[0].key.addr[0], cp->stream[0].key.port[0], 
 				&cp->stream[0].key.addr[1], cp->stream[0].key.port[1], 
 				cp->stream[0].bytes, cp->stream[0].pkts,
 				cp->stream[1].bytes, cp->stream[1].pkts);
+		cp->stream[0].bytes = 0;
+		cp->stream[1].bytes = 0;
+		cp->stream[0].pkts = 0;
+		cp->stream[1].pkts = 0;
+		cp->start = tms;
+		TAILQ_REMOVE(&tbl->lru, cp, lru);
+		TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 		tbl->nu_log ++;
 	}
 	return;
@@ -513,12 +529,12 @@ static  void tcp_conn_expire_handle(struct app_protocol *pp, struct app_conn *cp
 }
 #endif
 
-static void udp_process_handle(__attribute__((unused))struct app_protocol *pp, 
+static void udp_process_handle(
 		struct app_conn_tbl *tbl,
 		struct app_conn * cp, struct rte_mbuf *mb, 
 		uint64_t tms, struct ipv4_hdr *ip_hdr, 
 		size_t ip_hdr_offset, uint32_t from_client){
-	if (pp && tbl && cp && mb && ip_hdr && ip_hdr_offset && from_client && tms)
+	if (tbl && cp && mb && ip_hdr && ip_hdr_offset && from_client && tms)
 		return;
 }
 

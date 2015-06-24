@@ -507,6 +507,19 @@ static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
 	}
 }
 
+// report 
+static inline void app_lcore_worker_report(struct app_lcore_params_worker *lp, uint64_t tms) {
+	struct app_conn *cp;
+	struct app_conn_tbl *tbl = lp->conn_tbl;
+	TAILQ_FOREACH(cp, &tbl->rpt, rpt){
+		if(cp->start + lp->conn_tbl->rpt_cycles <= tms){
+			cp->pp->report_handle(tbl, cp, tms);
+		}else{
+			return;
+		}
+	}
+}
+
 static inline void app_lcore_worker_flush(struct app_lcore_params_worker *lp) {
 	uint32_t port;
 
@@ -559,7 +572,8 @@ static void app_lcore_main_loop_worker(void) {
 		}
 
 		if (APP_LCORE_WORKER_FLUSH && (unlikely(i == APP_LCORE_WORKER_FLUSH))) {
-			app_lcore_worker_flush(lp);
+			//app_lcore_worker_flush(lp);
+			app_lcore_worker_report(lp, cur_tsc);
 			i = 0;
 		}
 

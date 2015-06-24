@@ -72,6 +72,7 @@ struct app_conn_stream {
 	uint32_t seq;
 	uint32_t ack_seq;
 	uint32_t first_data_seq;
+	uint8_t state;
 	uint8_t urgdata;
 	uint8_t count_new_urg;
 	uint8_t urg_seen;
@@ -86,8 +87,11 @@ struct app_conn_stream {
 
 struct app_conn {
 	TAILQ_ENTRY(app_conn) lru;   /**< LRU list */
-	uint64_t last;       /**< creation timestamp */
-	uint32_t state;
+	TAILQ_ENTRY(app_conn) rpt;   /**< report list */
+	struct app_protocol *pp;
+	uint8_t state;
+	uint64_t start;       /**< creation timestamp */
+	uint64_t last;       /**< snd/rcv mbuf timestamp */
 	struct app_conn_stream stream[2];
 } __rte_cache_aligned;
 
@@ -105,6 +109,7 @@ struct conn_tbl_stat {
 /** connection table */
 struct app_conn_tbl {
 	uint64_t             max_cycles;      /**< ttl for table entries. */
+	uint64_t             rpt_cycles;      /**< ttl for table entries. */
 	uint32_t             entry_mask;      /**< hash value mask. */
 	uint32_t             max_entries;     /**< max entries allowed. */
 	uint32_t             use_entries;     /**< entries in use. */
@@ -114,6 +119,7 @@ struct app_conn_tbl {
 	uint32_t             nu_log;	      /**< num of log lines. */
 	struct conn_pkt *last;         /**< last used entry. */
 	struct app_conn_list lru;           /**< LRU list for table entries. */
+	struct app_conn_list rpt;           /**< report list for table entries. */
 	struct conn_tbl_stat stat;     /**< statistics counters. */
 	struct app_conn conn[0];        /**< hash table. */
 };
@@ -139,7 +145,7 @@ struct app_conn_tbl {
  */
 struct app_conn_tbl * app_conn_table_create(uint32_t bucket_num,
 		uint32_t bucket_entries,  uint32_t max_entries,
-		uint64_t max_cycles, int socket_id);
+		uint64_t max_cycles, uint64_t rpt_cycles, int socket_id);
 
 /*
  * Free allocated IP connection table.
@@ -220,8 +226,7 @@ struct app_protocol {
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
 			size_t ip_hdr_offset, uint32_t *from_client);
 
-	void (*process_handle)(struct app_protocol *pp, 
-			struct app_conn_tbl *tbl,
+	void (*process_handle)(struct app_conn_tbl *tbl,
 			struct app_conn *cp, struct rte_mbuf *mb, 
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
 			size_t ip_hdr_offset, uint32_t from_client);
@@ -230,9 +235,8 @@ struct app_protocol {
 			const struct rte_mbuf *mbuf, void *ip_hdr, 
 			const char *msg);
 
-	void (*report_handle)(struct app_protocol *pp,
-			struct app_conn_tbl *tbl,
-			struct app_conn *cp);
+	void (*report_handle)(struct app_conn_tbl *tbl,
+			struct app_conn *cp, uint64_t tms);
 #if 0
 	void (*conn_expire_handle)(struct app_protocol *pp, 
 			struct app_conn_tbl *tbl,

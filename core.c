@@ -75,7 +75,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 			goto out;
 		}
 
-		pp->process_handle(pp, lp->conn_tbl, cp, m, tms, ipv4_hdr, ip_hdr_offset, from_client);
+		pp->process_handle(lp->conn_tbl, cp, m, tms, ipv4_hdr, ip_hdr_offset, from_client);
 		
 #if 0
 		if (ipv4_hdr->next_proto_id == IPPROTO_TCP){
