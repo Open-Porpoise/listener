@@ -73,6 +73,7 @@
 #include <rte_timer.h>
 
 #include "main.h"
+#include "sender.h"
 
 static struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -568,7 +569,7 @@ static void app_init_worker(void){
 	uint64_t hz;
 	int ret;
 	int socket;
-	uint64_t per_hz;
+	uint64_t ms_per_hz;
 
 	hz = rte_get_timer_hz();
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
@@ -586,9 +587,9 @@ static void app_init_worker(void){
 		printf("ret_timer_reset lcore:%d ret:%d\n", lcore, ret);
 
 		/* frag table*/
-		per_hz = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S;
+		ms_per_hz = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S;
 		if ((lp_worker->frag_tbl = rte_ip_frag_table_create(DEF_FLOW_NUM,
-				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, per_hz * DEF_FLOW_TTL,
+				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, ms_per_hz * DEF_FLOW_TTL,
 				socket)) == NULL) {
 			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
 				DEF_FLOW_NUM, lcore);
@@ -596,8 +597,8 @@ static void app_init_worker(void){
 
 		/* connction table */
 		if ((lp_worker->conn_tbl = app_conn_table_create(DEF_CONN_NUM,
-				APP_CONN_TBL_BUCKET_ENTRIES, DEF_CONN_NUM, per_hz * DEF_CONN_TTL, 
-				per_hz * DEF_RPT_TTL, socket)) == NULL) {
+				APP_CONN_TBL_BUCKET_ENTRIES, DEF_CONN_NUM, ms_per_hz * DEF_CONN_TTL, 
+				ms_per_hz * DEF_RPT_TTL, socket)) == NULL) {
 			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
 				DEF_CONN_NUM, lcore);
 		}
@@ -606,7 +607,11 @@ static void app_init_worker(void){
 	}
 }
 
-
+static void app_init_mq(void){
+	if ((app.msgid = msgget(SND_MSG_KEY, IPC_CREAT|0600)) < 0){
+		rte_panic("msgget error \n");
+	}
+}
 
 void
 app_init(void)
@@ -618,8 +623,8 @@ app_init(void)
 	app_init_rings_tx();
 	app_init_nics();
 	app_init_protocol();
-	//app_init_conn_tab();
 	app_init_worker();
+	app_init_mq();
 	printf("Initialization completed.\n");
 }
 

@@ -39,6 +39,8 @@ struct app_conn_key {
 
 struct app_lcore_params_worker;
 
+#define APP_CONN_TBL_STAT
+
 #ifdef APP_CONN_TBL_STAT
 #define	APP_CONN_TBL_STAT_UPDATE(s, f, v)	((s)->f += (v))
 #else
@@ -98,6 +100,21 @@ struct app_conn {
 
 /** connection table statistics */
 struct conn_tbl_stat {
+	/* counter */
+	uint64_t conn_miss;
+	uint64_t frag;
+	uint64_t unknow;
+	uint64_t vlan;
+	uint64_t total_pkts;
+	uint64_t total_bytes;
+	uint64_t proc_pkts;
+	uint64_t proc_bytes;
+	uint64_t conn;
+	uint64_t rpt;
+	uint64_t rpt_max;
+	uint64_t rpt_loop;
+	uint64_t msg_fail;
+
 	uint64_t find_num;      /**< total # of find/insert attempts. */
 	uint64_t add_num;       /**< # of add ops. */
 	uint64_t del_num;       /**< # of del ops. */
@@ -116,7 +133,8 @@ struct app_conn_tbl {
 	uint32_t             bucket_entries;  /**< hash assocaitivity. */
 	uint32_t             nb_entries;      /**< total size of the table. */
 	uint32_t             nb_buckets;      /**< num of associativity lines. */
-	uint32_t             nu_log;	      /**< num of log lines. */
+
+    uint32_t             nu_log;	      /**< num of log lines. */
 	struct conn_pkt *last;         /**< last used entry. */
 	struct app_conn_list lru;           /**< LRU list for table entries. */
 	struct app_conn_list rpt;           /**< report list for table entries. */

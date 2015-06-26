@@ -80,6 +80,7 @@
 
 #ifndef APP_LCORE_WORKER_FLUSH
 #define APP_LCORE_WORKER_FLUSH       1000000
+#define APP_LCORE_WORKER_FLUSH_RPT   3000
 #endif
 
 #ifndef APP_STATS
@@ -511,10 +512,16 @@ static inline void app_lcore_worker(struct app_lcore_params_worker *lp,
 static inline void app_lcore_worker_report(struct app_lcore_params_worker *lp, uint64_t tms) {
 	struct app_conn *cp;
 	struct app_conn_tbl *tbl = lp->conn_tbl;
+	uint32_t cnt = 0;
+
+	APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, rpt_loop, 1);
+
 	TAILQ_FOREACH(cp, &tbl->rpt, rpt){
-		if(cp->start + lp->conn_tbl->rpt_cycles <= tms){
+		if(cp->start + lp->conn_tbl->rpt_cycles <= tms && cnt < APP_LCORE_WORKER_FLUSH_RPT){
 			cp->pp->report_handle(tbl, cp, tms);
+			cnt++;
 		}else{
+			lp->conn_tbl->stat.rpt_max = lp->conn_tbl->stat.rpt_max > cnt ? lp->conn_tbl->stat.rpt_max : cnt;
 			return;
 		}
 	}
@@ -578,6 +585,7 @@ static void app_lcore_main_loop_worker(void) {
 		}
 
 		app_lcore_worker(lp, bsz_rd, cur_tsc);
+
 
 		rte_ip_frag_free_death_row(&lp->frag_dr, PREFETCH_OFFSET);
 		//rte_conn_free_death_row(&lp->conn_dr, PREFETCH_OFFSET);

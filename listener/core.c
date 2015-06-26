@@ -27,7 +27,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 	struct app_protocol *pp;
 	struct app_conn *cp;
 	if(vlan_offset){
-		lp->app_vlan_count++;
+		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, vlan, 1);
 	}
 
 	if (lp && rte_cpu_to_be_16(ETHER_TYPE_IPv4) == proto) {
@@ -35,6 +35,9 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		ip_hdr_offset = (ipv4_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
 				IPV4_IHL_MULTIPLIER;
 
+		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, total_pkts, 1);
+		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, total_bytes,
+				rte_be_to_cpu_16(ipv4_hdr->total_length));
 
 		 /* if it is a fragmented packet, then try to reassemble. */
 		if (rte_ipv4_frag_pkt_is_fragmented(ipv4_hdr)) {
@@ -62,7 +65,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 #endif 
 				ipv4_hdr = (struct ipv4_hdr *)(eth_hdr + 1);
 			}
-			lp->app_frag_count++;
+			APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, frag, 1);
 		}
 		eth_hdr->ether_type = rte_be_to_cpu_16(ETHER_TYPE_IPv4);
 
@@ -72,6 +75,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 			 goto out;
 
 		if((cp = pp->conn_get(pp, lp->conn_tbl, m, tms, ipv4_hdr, ip_hdr_offset, &from_client)) == NULL){
+			APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, conn_miss, 1);
 			goto out;
 		}
 
@@ -110,7 +114,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		goto out;
 */
 	}else{
-		lp->app_unknow_count++;
+		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, unknow, 1);
 	}
 
 out:
@@ -120,23 +124,60 @@ out:
 
 
 void app_worker_counter_reset(uint32_t lcore_id, 
-		struct app_lcore_params_worker *lp_worker){
-	//memset(lp_worker->app_conn_tab, 0, 
-	//		APP_CONN_TAB_SIZE * sizeof(*lp_worker->app_conn_tab));
-	printf("lcore(%2u) pkt:%8u,\tbytes:%8lu/%lf(Mb/s),\thash_count:%8u,\tfrag:%8u,\tvlan:%8u,\tunknow proto:%u\n", lcore_id, 
-			lp_worker->app_pkt_count,
-			lp_worker->app_bytes_count,
-			((double)lp_worker->app_bytes_count * 8)/ (60 *  (1<<20)),
-			lp_worker->app_conn_count[0] - lp_worker->app_conn_count[1], 
-			lp_worker->app_frag_count,
-			lp_worker->app_vlan_count,
-			lp_worker->app_unknow_count);
-	lp_worker->app_conn_count[1] = lp_worker->app_conn_count[0];
-	lp_worker->app_frag_count = 0;
-	lp_worker->app_unknow_count = 0;
-	lp_worker->app_vlan_count = 0;
-	lp_worker->app_pkt_count = 0;
-	lp_worker->app_bytes_count = 0;
+		struct app_lcore_params_worker *lp){
+	uint64_t fail_total, fail_nospace;
+	struct app_conn_tbl *tbl = lp->conn_tbl;
+	struct conn_tbl_stat *stat = &tbl->stat;
+
+	fail_total = stat->fail_total;
+	fail_nospace = stat->fail_nospace;
+
+	//memset(lp->app_conn_tab, 0, 
+	//		APP_CONN_TAB_SIZE * sizeof(*lp->app_conn_tab));
+	printf("max entries:\t%u;\n"
+		"entries in use:\t%u;\n"
+		"finds/inserts:\t%" PRIu64 ";\n"
+		"entries added:\t%" PRIu64 ";\n"
+		"entries deleted by timeout:\t%" PRIu64 ";\n"
+		"entries reused by timeout:\t%" PRIu64 ";\n"
+		"total add failures:\t%" PRIu64 ";\n"
+		"add no-space failures:\t%" PRIu64 ";\n"
+		"add hash-collisions failures:\t%" PRIu64 ";\n",
+		tbl->max_entries,
+		tbl->use_entries,
+		stat->find_num,
+		stat->add_num,
+		stat->del_num,
+		stat->reuse_num,
+		fail_total,
+		fail_nospace,
+		fail_total - fail_nospace);
+	printf("lcore(%2u) pkt:%8lu/%lu, bytes:%lu/%lu|%lf/%lf(Mb/s), miss_conn_pkt:%lu, hash_count:%lu, frag:%lu, vlan:%lu, rpt:%lu/%lu/%lu, msg_fail:%lu, unknow proto:%lu\n", lcore_id, 
+			stat->proc_pkts, stat->total_pkts,
+			stat->proc_bytes, stat->total_bytes,
+			((double)stat->proc_bytes * 8)/ (60 *  (1<<20)),
+			((double)stat->total_bytes * 8)/ (60 *  (1<<20)),
+			stat->conn_miss, 
+			stat->conn, 
+			stat->frag,
+			stat->vlan,
+			stat->rpt,
+			stat->rpt_max,
+			stat->rpt_loop,
+			stat->msg_fail,
+			stat->unknow);
+
+	stat->conn = 0;
+	stat->conn_miss = 0;
+	stat->frag = 0;
+	stat->vlan = 0;
+	stat->unknow = 0;
+	stat->proc_pkts = 0;
+	stat->proc_bytes = 0;
+	stat->total_pkts = 0;
+	stat->total_bytes = 0;
+	stat->rpt = 0;
+	stat->rpt_max = 0;
+	stat->rpt_loop = 0;
+	stat->msg_fail = 0;
 }
-
-

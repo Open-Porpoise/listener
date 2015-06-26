@@ -1,0 +1,6 @@
+[submodule "librdkafka"]
+	path = librdkafka
+	url = https://github.com/edenhill/librdkafka.git
+[submodule "geolocation"]
+	path = geolocation
+	url = https://github.com/yubo/geolocation.git

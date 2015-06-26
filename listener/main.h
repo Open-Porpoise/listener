@@ -55,12 +55,12 @@
 
 #define	MAX_CONN_NUM	UINT32_MAX
 #define	MIN_CONN_NUM	1
-#define	DEF_CONN_NUM	0x1000
-#define	APP_CONN_TBL_BUCKET_ENTRIES	16
+#define	DEF_CONN_NUM	0x80000
+#define	APP_CONN_TBL_BUCKET_ENTRIES	2
 #define	MAX_CONN_TTL	(3600 * MS_PER_S)
 #define	MIN_CONN_TTL	1
-#define	DEF_CONN_TTL	(7 * MS_PER_S)
-#define	DEF_RPT_TTL	(60 * MS_PER_S)
+#define	DEF_CONN_TTL	(30 * MS_PER_S)
+#define	DEF_RPT_TTL		(60 * MS_PER_S)
 
 
 /* ip reassebly */
@@ -377,16 +377,9 @@ struct app_lcore_params_worker {
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
 	//uint8_t *app_conn_tab;
-	uint32_t app_conn_count[2];
 	struct rte_timer app_timer;
 
 
-	/* counter */
-	uint32_t app_frag_count;
-	uint32_t app_unknow_count;
-	uint32_t app_vlan_count;
-	uint32_t app_pkt_count;
-	uint64_t app_bytes_count;
 };
 
 
@@ -440,6 +433,10 @@ struct app_params {
 
 	/* ip list */
 	radix_tree_t *ip_list;
+
+
+	/* mq */
+	int msgid;
 } __rte_cache_aligned;
 
 /*
@@ -496,5 +493,14 @@ void app_print_params(void);
 void process_mbuf(struct app_lcore_params_worker *lp, struct rte_mbuf *pkt, uint64_t tms);
 void app_worker_counter_reset(uint32_t lcore_id, 
 		struct app_lcore_params_worker *lp_worker);
+
+#ifndef  NIPQUAD
+#define NIPQUAD(addr) \
+	((unsigned char *)&addr)[0], \
+((unsigned char *)&addr)[1], \
+((unsigned char *)&addr)[2], \
+((unsigned char *)&addr)[3]
+#define NIPQUAD_FMT "%u.%u.%u.%u"
+#endif 
 
 #endif /* _MAIN_H_ */
