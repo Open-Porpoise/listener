@@ -572,7 +572,7 @@ parse_arg_bsz(const char *arg)
 }
 
 #ifndef APP_ARG_NUMERICAL_SIZE_CHARS
-#define APP_ARG_NUMERICAL_SIZE_CHARS 15
+#define APP_ARG_NUMERICAL_SIZE_CHARS 128
 #endif
 
 static int parse_arg_ip_list(const char *arg) {
@@ -580,7 +580,7 @@ static int parse_arg_ip_list(const char *arg) {
 	int num, prefix;
 	uint32_t net;
 	char network[16];
-	char line[256];
+	char line[512];
 
 	if (strnlen(arg, APP_ARG_NUMERICAL_SIZE_CHARS + 1) == APP_ARG_NUMERICAL_SIZE_CHARS + 1) {
 		return -1;

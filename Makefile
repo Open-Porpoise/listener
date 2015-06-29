@@ -3,7 +3,7 @@ all: ./sender/sender ./listener/build/listener
 ./sender/sender: ./geolocation/libgeolocation.a ./librdkafka/src/librdkafka.a
 	make -C sender
 
-./listener/build/listener: ./geolocation/libgeolocation.a
+./listener/build/listener: ./geolocation/libgeolocation.a ./listener/*.h ./listener/*.c
 	make -C listener
 
 ./librdkafka/src/librdkafka.a: ./librdkafka/Makefile.config
