@@ -292,11 +292,14 @@ ipv4_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 
 		/* found a free entry to reuse. */
 		if (free != NULL ){
-#if 0
-			if ((tcp_flags & TCP_FLAG_ALL) == TCP_SYN_FLAG) {
+#if 1
+			/* add conn when syn and dst_addr in ip_list */
+			if (((tcp_flags & TCP_FLAG_ALL) == TCP_SYN_FLAG) && 
+					(radix32tree_find(app.ip_list, ntohl(key->addr[1])))) {
 				app_conn_tbl_add(tbl,  free, key, tms, pp);
 				//ip_frag_tbl_add(tbl,  free, key, tms);
 				cp = free;
+				*from_client = 1;
 			}
 #else
 				app_conn_tbl_add(tbl,  free, key, tms, pp);
@@ -365,10 +368,23 @@ ipv4_udp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		}
 
 		/* found a free entry to reuse. */
-		if (free != NULL) {
-			app_conn_tbl_add(tbl,  free, key, tms, pp);
-			//ip_frag_tbl_add(tbl,  free, key, tms);
-			cp = free;
+		if (free != NULL){
+			if (radix32tree_find(app.ip_list, ntohl(key->addr[1]))) {
+				app_conn_tbl_add(tbl,  free, key, tms, pp);
+				//ip_frag_tbl_add(tbl,  free, key, tms);
+				cp = free;
+				*from_client = 1;
+			}else if(radix32tree_find(app.ip_list, ntohl(key->addr[0]))){
+				struct app_conn_key k = {
+					.addr = {key->addr[1], key->addr[0]},
+					.port = {key->port[1], key->port[0]},
+					.proto = key->proto,
+				};
+				app_conn_tbl_add(tbl,  free, &k, tms, pp);
+				//ip_frag_tbl_add(tbl,  free, key, tms);
+				cp = free;
+				*from_client = 0;
+			}
 		}
 
 	/*
