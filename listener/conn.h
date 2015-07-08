@@ -61,6 +61,24 @@ TAILQ_HEAD(app_conn_list, app_conn); /**< @internal connments tailq */
 
 struct app_conn;
 
+#if 0
+/**
+ * TCP Header
+ */
+struct tcp_hdr {
+	uint16_t src_port;  /**< TCP source port. */
+	uint16_t dst_port;  /**< TCP destination port. */
+	uint32_t sent_seq;  /**< TX data sequence number. */
+	uint32_t recv_ack;  /**< RX data acknowledgement sequence number. */
+	uint8_t  data_off;  /**< Data offset. */
+	uint8_t  tcp_flags; /**< TCP flags */
+	uint16_t rx_win;    /**< RX flow control window. */
+	uint16_t cksum;     /**< TCP checksum. */
+	uint16_t tcp_urp;   /**< TCP urgent pointer, if any. */
+} __attribute__((__packed__));
+#endif
+
+
 struct app_conn_stream {
 	uint32_t flags;
 	struct app_conn_key key;
@@ -69,12 +87,12 @@ struct app_conn_stream {
 	uint64_t start;       /**< creation timestamp */
 	uint64_t last;       /**< last update timestamp */
 
+
 	int32_t urg_count;
 	uint32_t acked;
 	uint32_t seq;
 	uint32_t ack_seq;
 	uint32_t first_data_seq;
-	uint8_t state;
 	uint8_t urgdata;
 	uint8_t count_new_urg;
 	uint8_t urg_seen;
@@ -85,6 +103,23 @@ struct app_conn_stream {
 	uint32_t curr_ts; 
 	uint32_t wscale;
 	struct app_conn *cp;
+
+
+	/* from nids */
+  char state;
+  char collect;
+  char collect_urg;
+
+  char *data;
+  int offset;
+  int count;
+  int count_new;
+  int bufsize;
+  int rmem_alloc;
+  struct skbuff *list;
+  struct skbuff *listtail;
+
+
 };
 
 struct app_conn {
@@ -94,7 +129,13 @@ struct app_conn {
 	uint8_t state;
 	uint64_t start;       /**< creation timestamp */
 	uint64_t last;       /**< snd/rcv mbuf timestamp */
-	struct app_conn_stream stream[2];
+
+
+	struct app_conn_stream client; /* 0:client 1:server */
+	struct app_conn_stream server; /* 0:client 1:server */
+
+	int read;
+
 } __rte_cache_aligned;
 
 
@@ -263,20 +304,19 @@ struct app_protocol {
 
 };
 
-enum {
-	TCP_ESTABLISHED = 1,
-	TCP_SYN_SENT,
-	TCP_SYN_RECV,
-	TCP_FIN_WAIT1,
-	TCP_FIN_WAIT2,
-	TCP_TIME_WAIT,
-	TCP_CLOSE,
-	TCP_CLOSE_WAIT,
-	TCP_LAST_ACK,
-	TCP_LISTEN,
-	TCP_CLOSING,	/* Now a valid state */
+struct skbuff {
+  struct skbuff *next;
+  struct skbuff *prev;
 
-	TCP_MAX_STATES	/* Leave at the end! */
+  void *data;
+  u_int len;
+  u_int truesize;
+  u_int urg_ptr;
+  
+  char fin;
+  char urg;
+  u_int seq;
+  u_int ack;
 };
 
 

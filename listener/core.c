@@ -57,7 +57,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 			if (mo != m) {
 				m = mo;
 				eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
-#if 1
+#if 0
 				if(get_vlan_offset(eth_hdr, &proto)){
 					dump_mbuf(m);
 					rte_panic("find vlan in reassembled mbuf\n");
@@ -80,39 +80,10 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		}
 
 		pp->process_handle(lp->conn_tbl, cp, m, tms, ipv4_hdr, ip_hdr_offset, from_client);
-		
-#if 0
-		if (ipv4_hdr->next_proto_id == IPPROTO_TCP){
-			tcp_hdr = (struct tcp_hdr *)((char *)ipv4_hdr +
-					ip_hdr_offset);
-			//v = rte_jhash_3words(p[0], p[1], key->id, PRIME_VALUE);
-			hash = app_conn_hashkey(ipv4_hdr->src_addr, tcp_hdr->src_port, 
-					ipv4_hdr->dst_addr, tcp_hdr->dst_port);
-			hash &= APP_CONN_TAB_SIZE - 1;
-			if(!lp->app_conn_tab[hash]){
-				lp->app_conn_count[0]++;
-				lp->app_conn_tab[hash] = 1;
-			}
-			lp->app_bytes_count += rte_be_to_cpu_16(ipv4_hdr->total_length);
-			lp->app_pkt_count++; 
-		} else if (ipv4_hdr->next_proto_id == IPPROTO_UDP) {
-			udp_hdr = (struct udp_hdr *)((char *)ipv4_hdr +
-					ip_hdr_offset);
-			hash = app_conn_hashkey(ipv4_hdr->src_addr, udp_hdr->src_port, 
-					ipv4_hdr->dst_addr, udp_hdr->dst_port);
-			hash &= APP_CONN_TAB_SIZE - 1;
-			if(!lp->app_conn_tab[hash]){
-				lp->app_conn_count[0]++;
-				lp->app_conn_tab[hash] = 1;
-			}
-			lp->app_bytes_count += rte_be_to_cpu_16(ipv4_hdr->total_length);
-			lp->app_pkt_count++; 
-		}
-#endif
-/*
+	/*
 	}else if  (rte_cpu_to_be_16(ETHER_TYPE_IPv6) == proto) {
 		goto out;
-*/
+	*/
 	}else{
 		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, unknow, 1);
 	}

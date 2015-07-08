@@ -35,6 +35,19 @@ static inline uint32_t ipv6_hash(struct ipv6_hdr *ipv6_hdr) {
 			(word_src_addr[3] ^ word_dst_addr[3]);
 }
 
+static inline int
+before(u_int seq1, u_int seq2)
+{
+  return ((int)(seq1 - seq2) < 0);
+}
+
+static inline int
+after(u_int seq1, u_int seq2)
+{
+  return ((int)(seq2 - seq1) < 0);
+}
+
+
 
 
 #endif
