@@ -53,10 +53,16 @@
 
 /* conn */
 
+
+
 #define	MAX_CONN_NUM	UINT32_MAX
 #define	MIN_CONN_NUM	1
-//#define	DEF_CONN_NUM	0x80000
-#define	DEF_CONN_NUM	0x8000
+
+#ifdef DEBUG
+#define	DEF_CONN_NUM	0x800
+#else
+#define	DEF_CONN_NUM	0x100000
+#endif
 #define	APP_CONN_TBL_BUCKET_ENTRIES	2
 #define	MAX_CONN_TTL	(3600 * MS_PER_S)
 #define	MIN_CONN_TTL	1

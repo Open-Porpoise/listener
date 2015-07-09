@@ -14,7 +14,6 @@
 
 #define SND_BROKERS "10.106.201.44:21500,10.106.201.45:21500,10.106.201.46:21500"
 #define SND_TOPIC "uaq"
-#define DEBUG 1
 #define SND_COMPRESSION "snappy" 
 #define SND_MSG_TYPE_UAQ 1
 #define SND_MSG_KEY 0x3019

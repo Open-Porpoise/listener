@@ -44,7 +44,7 @@ APP = listener
 # all source are stored in SRCS-y
 SRCS-y := main.c config.c init.c runtime.c utils.c core.c conn.c $(SRCDIR)/../geolocation/libgeolocation.a
 
-CFLAGS += -O0 -g  -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
+CFLAGS += -O0 -g -DDEBUG -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS_config.o := -D_GNU_SOURCE
 

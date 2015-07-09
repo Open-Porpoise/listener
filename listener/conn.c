@@ -57,7 +57,7 @@ struct app_conn_tbl * app_conn_table_create(uint32_t bucket_num, uint32_t bucket
 
 static  int app_conn_is_empty(const struct app_conn *cp)
 {
-	if(cp && cp->client.key.src_dst_addr)
+	if(cp && cp->client.key.src_dst_addr == 0)
 		return 1;
 	return 0;
 }
@@ -960,7 +960,7 @@ static struct app_conn * ipv4_tcp_conn_find(struct app_protocol *pp, struct rte_
 
 		/*timed-out entry, free and invalidate it*/
 		if (stale != NULL) {
-			pp->report_handle(tbl, stale, tms);
+			stale->pp->report_handle(tbl, stale, tms);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
 
