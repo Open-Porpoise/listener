@@ -83,7 +83,7 @@ static void prune_queue(struct app_conn_stream * rcv)
 }
 
 /* local frag table helper functions */
-static void app_conn_tbl_del(struct app_conn_tbl *tbl, 
+void app_conn_tbl_del(struct app_conn_tbl *tbl, 
 		struct app_conn *cp)
 {
 	//ip_frag_free(fp, dr);

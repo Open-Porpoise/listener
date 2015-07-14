@@ -134,7 +134,7 @@ int main (int argc, char **argv) {
 				(char *)e->province,
 				time(NULL));
 
-		if((msg_cnt & 0xfffff) == 0xfffff){
+		if((msg_cnt & 0xf) == 0xf){
 			printf("msg_cnt: %lu, msg: %s\n", msg_cnt, pbuf);
 		}
 
@@ -161,8 +161,9 @@ int main (int argc, char **argv) {
 		rd_kafka_poll(rk, 0);
 	}
 
-	if (DEBUG)
+#ifdef DEBUG
 		rd_kafka_dump(stdout, rk);
+#endif
 
 	/* Wait for messages to be delivered */
 	while (run && rd_kafka_poll(rk, 1000) != -1)

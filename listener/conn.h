@@ -326,5 +326,6 @@ int register_app_protocol(struct app_protocol *pp);
 struct app_protocol *app_proto_get(unsigned short proto);
 extern struct app_protocol app_protocol_tcp;
 extern struct app_protocol app_protocol_udp;
-
+extern void app_conn_tbl_del(struct app_conn_tbl *tbl, 
+		struct app_conn *cp);
 #endif

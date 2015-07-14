@@ -17,6 +17,20 @@
 
 #define HASH_L4_PORTS(h) ((h)->src_port ^ (h)->dst_port)
 
+#ifndef TAILQ_FOREACH_SAFE
+/*
+ * TAILQ_FOREACH_SAFE() provides a traversal where the current iterated element
+ * may be freed or unlinked.
+ * It does not allow freeing or modifying any other element in the list,
+ * at least not the next element.
+ */
+#define TAILQ_FOREACH_SAFE(elm,head,field,tmpelm)			\
+	for ((elm) = TAILQ_FIRST(head) ;				\
+	     (elm) && ((tmpelm) = TAILQ_NEXT((elm), field), 1) ;	\
+	     (elm) = (tmpelm))
+#endif
+
+
 void dump_mbuf(const struct rte_mbuf *m);
 uint32_t xmit_l34_hash32(struct rte_mbuf *buf);
 size_t get_vlan_offset(struct ether_hdr *eth_hdr, uint16_t *proto);
