@@ -379,14 +379,14 @@ struct app_lcore_params_worker {
 
 	/* connction */
 	struct app_conn_tbl *conn_tbl;
-//	struct rte_conn_death_row conn_dr;
+	//struct rte_conn_death_row conn_dr;
 
 	/* conn_tab */
 	//struct list_head *app_conn_tab;
 	//uint8_t *app_conn_tab;
 	struct rte_timer app_timer;
 
-
+	int debug;
 };
 
 

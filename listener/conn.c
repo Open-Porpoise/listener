@@ -153,9 +153,11 @@ static struct app_conn * ipv4_conn_lookup(struct app_conn_tbl *tbl,struct rte_mb
 		   */
 
 		if (ipv4_conn_key_cmp(key, &p1[i].client.key) == 0){
+			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, from_client, 1);
 			*from_client = 1;
 			return (p1 + i);
 		}else if (ipv4_conn_key_cmp(key, &p1[i].server.key) == 0) {
+			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, from_server, 1);
 			*from_client = 0;
 			return (p1 + i);
 		} else if (app_conn_is_empty(p1+i))
@@ -910,8 +912,8 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->client.key = key[0];
 	cp->server.key.addr[0] = key->addr[1];
 	cp->server.key.addr[1] = key->addr[0];
-	cp->server.key.port[0] = key->addr[1];
-	cp->server.key.port[1] = key->addr[0];
+	cp->server.key.port[0] = key->port[1];
+	cp->server.key.port[1] = key->port[0];
 	cp->server.key.proto = key->proto;
 	cp->server.start = tms;
 	cp->server.last = tms;
@@ -1064,16 +1066,6 @@ static struct app_conn * ipv4_tcp_conn_get(struct app_protocol *pp, struct app_c
 	if(key.src_dst_addr == 0 ){
 		return NULL;
 	}
-
-	/*
-	if (my_tcp_check(tcp_hdr, iplen - ip_hdr_offset,
-				this_iphdr->ip_src.s_addr, this_iphdr->ip_dst.s_addr)) {
-		nids_params.syslog(NIDS_WARN_TCP, NIDS_WARN_TCP_HDR, this_iphdr,
-				tcp_hdr);
-		return;
-	}
-	*/
-
 
 	/* try to find/add entry into the connection table. */
 	return ipv4_tcp_conn_find(pp, mb, tbl, &key, tms, 
@@ -1279,7 +1271,7 @@ static  void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	}
 
 	if (tbl->nu_log < 100){
-		printf("%s "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u last:%lu tms:%lu time:%lu\n", 
+		RTE_LOG(DEBUG, USER1, "%s "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u last:%lu tms:%lu time:%lu\n", 
 				cp->pp->name, 
 				NIPQUAD(cp->client.key.addr[0]), rte_be_to_cpu_16(cp->client.key.port[0]),
 				NIPQUAD(cp->client.key.addr[1]), rte_be_to_cpu_16(cp->client.key.port[1]),
@@ -1325,7 +1317,7 @@ static void udp_conn_expire_handle(struct app_protocol *pp, struct app_conn *cp)
 static struct app_protocol *app_proto_table[APP_PROTO_TAB_SIZE];
 
 /*                                          
- *  register an ipvs protocol               
+ *  register an protocol               
  */                                         
 int register_app_protocol(struct app_protocol *pp)
 {

@@ -552,6 +552,20 @@ static void app_init_protocol(void) {
     REGISTER_PROTOCOL(&app_protocol_udp); 
 #endif
 }
+
+#if 0
+static void app_ring_rx_status(struct app_lcore_worker *lp){
+	int i;
+	struct rte_ring *ring = NULL;
+	
+	for(i = 0; i < lp->n_rings_in, i++){
+		ring = lp->rings_in[i];
+		RTE_LOG(DEBUG, USER1, "");
+	}
+}
+#endif
+
+
 /* timer callback */
 static void
 app_timer_cb(__attribute__((unused)) struct rte_timer *tim,

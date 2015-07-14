@@ -214,7 +214,7 @@ app_lcore_io_rx(
 
 			rte_eth_stats_get(port, &stats);
 
-			printf("I/O RX %u in (NIC port %u): NIC drop ratio = %.2f avg burst size = %.2f\n",
+			RTE_LOG(DEBUG, USER2, "I/O RX %u in (NIC port %u): NIC drop ratio = %.2f avg burst size = %.2f\n",
 				lcore,
 				(unsigned) port,
 				(double) stats.imissed / (double) (stats.imissed + stats.ipackets),

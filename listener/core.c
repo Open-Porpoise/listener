@@ -105,12 +105,14 @@ void app_worker_counter_reset(uint32_t lcore_id,
 
 	//memset(lp->app_conn_tab, 0, 
 	//		APP_CONN_TAB_SIZE * sizeof(*lp->app_conn_tab));
-	printf("max entries:\t%u;\n"
+	RTE_LOG(DEBUG, USER1, "max entries:\t%u;\n"
 		"entries in use:\t%u;\n"
 		"finds/inserts:\t%" PRIu64 ";\n"
 		"entries added:\t%" PRIu64 ";\n"
 		"entries deleted by timeout:\t%" PRIu64 ";\n"
 		"entries reused by timeout:\t%" PRIu64 ";\n"
+		"from_client:\t%" PRIu64 ";\n"
+		"from_server:\t%" PRIu64 ";\n"
 		"total add failures:\t%" PRIu64 ";\n"
 		"add no-space failures:\t%" PRIu64 ";\n"
 		"add hash-collisions failures:\t%" PRIu64 ";\n",
@@ -120,10 +122,12 @@ void app_worker_counter_reset(uint32_t lcore_id,
 		stat->add_num,
 		stat->del_num,
 		stat->reuse_num,
+		stat->from_client,
+		stat->from_server,
 		fail_total,
 		fail_nospace,
 		fail_total - fail_nospace);
-	printf("lcore(%2u) pkt:%8lu/%lu, bytes:%lu/%lu|%lf/%lf(Mb/s), miss_conn_pkt:%lu, hash_count:%lu, frag:%lu, vlan:%lu, rpt:%lu/%lu/%lu, msg_fail:%lu, unknow proto:%lu\n", lcore_id, 
+	RTE_LOG(DEBUG, USER1, "lcore(%2u) pkt:%8lu/%lu, bytes:%lu/%lu|%lf/%lf(Mb/s), miss_conn_pkt:%lu, hash_count:%lu, frag:%lu, vlan:%lu, rpt:%lu/%lu/%lu, msg_fail:%lu, unknow proto:%lu\n", lcore_id, 
 			stat->proc_pkts, stat->total_pkts,
 			stat->proc_bytes, stat->total_bytes,
 			((double)stat->proc_bytes * 8)/ (60 *  (1<<20)),

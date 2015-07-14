@@ -155,6 +155,8 @@ struct conn_tbl_stat {
 	uint64_t rpt_max;
 	uint64_t rpt_loop;
 	uint64_t msg_fail;
+	uint64_t from_client;
+	uint64_t from_server;
 
 	uint64_t find_num;      /**< total # of find/insert attempts. */
 	uint64_t add_num;       /**< # of add ops. */

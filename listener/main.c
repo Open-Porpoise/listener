@@ -40,6 +40,9 @@ main(int argc, char **argv)
 	int ret;
 	char *prog = argv[0];
 
+	rte_set_log_level(RTE_LOG_DEBUG);
+	rte_set_log_type(RTE_LOGTYPE_USER1, 1);
+
 	/* Init EAL */
 	ret = rte_eal_init(argc, argv);
 	if (ret < 0)
