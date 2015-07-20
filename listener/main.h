@@ -47,9 +47,7 @@
 #include <rte_timer.h>
 #include "geolocation.h"
 #include "conn.h"
-
-#define CONFIG_APP_PROTO_TCP
-#define CONFIG_APP_PROTO_UDP
+#include "listener.h"
 
 /* conn */
 

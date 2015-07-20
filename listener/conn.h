@@ -322,10 +322,13 @@ struct skbuff {
 };
 
 
-int register_app_protocol(struct app_protocol *pp);
+int app_register_protocol(struct app_protocol *pp);
 struct app_protocol *app_proto_get(unsigned short proto);
-extern struct app_protocol app_protocol_tcp;
-extern struct app_protocol app_protocol_udp;
-extern void app_conn_tbl_del(struct app_conn_tbl *tbl, 
+struct app_protocol app_protocol_tcp;
+struct app_protocol app_protocol_udp;
+void app_conn_tbl_del(struct app_conn_tbl *tbl, 
 		struct app_conn *cp);
+struct app_conn * conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
+		const struct app_conn_key *key, uint64_t tms,
+		struct app_conn **free, struct app_conn **stale, uint32_t *from_client);
 #endif

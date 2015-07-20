@@ -42,7 +42,9 @@ include $(RTE_SDK)/mk/rte.vars.mk
 APP = listener
 
 # all source are stored in SRCS-y
-SRCS-y := main.c config.c init.c runtime.c utils.c core.c conn.c $(SRCDIR)/../geolocation/libgeolocation.a
+SRCS-y := main.c config.c init.c runtime.c utils.c core.c conn.c \
+			proto.c proto_udp.c proto_tcp.c \
+			$(SRCDIR)/../geolocation/libgeolocation.a
 
 CFLAGS += -O0 -g -DDEBUG -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
 CFLAGS += $(WERROR_FLAGS)

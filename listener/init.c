@@ -74,6 +74,7 @@
 
 #include "main.h"
 #include "sender.h"
+#include "listener.h"
 
 static struct rte_eth_conf port_conf = {
 	.rxmode = {
@@ -538,19 +539,18 @@ static void app_init_protocol(void) {
 	char protocols[64];
 #define REGISTER_PROTOCOL(p)            \
     do {                    \
-        register_app_protocol(p); \
+        app_register_protocol(p); \
         strcat(protocols, ", ");    \
         strcat(protocols, (p)->name);   \
     } while (0)
 
     protocols[0] = '\0';
     protocols[2] = '\0';
-#ifdef CONFIG_APP_PROTO_TCP 
-    REGISTER_PROTOCOL(&app_protocol_tcp); 
-#endif 
-#ifdef CONFIG_APP_PROTO_UDP 
-    REGISTER_PROTOCOL(&app_protocol_udp); 
-#endif
+
+	if(CONFIG_APP_PROTO_TCP)
+		REGISTER_PROTOCOL(&app_protocol_tcp); 
+	if(CONFIG_APP_PROTO_UDP)
+		REGISTER_PROTOCOL(&app_protocol_udp); 
 }
 
 #if 0
