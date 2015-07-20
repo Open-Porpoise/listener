@@ -130,7 +130,6 @@ struct app_conn {
 	uint64_t start;       /**< creation timestamp */
 	uint64_t last;       /**< snd/rcv mbuf timestamp */
 
-
 	struct app_conn_stream client; /* 0:client 1:server */
 	struct app_conn_stream server; /* 0:client 1:server */
 

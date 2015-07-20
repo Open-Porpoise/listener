@@ -10,3 +10,4 @@ tmp/
 sender/sender
 *.json
 *.sh
+*.pyc

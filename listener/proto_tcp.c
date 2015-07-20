@@ -6,14 +6,12 @@
 #include "utils.h"
 #include "sender.h"
 
-/* #################### TCP ###################### */
-
-# define CONN_S_JUST_EST 1
-# define CONN_S_DATA 2
-# define CONN_S_CLOSE 3
-# define CONN_S_RESET 4
-# define CONN_S_TIMED_OUT 5
-# define CONN_S_EXITING   6	/* conn is exiting; last chance to get data */
+#define CONN_S_JUST_EST 1
+#define CONN_S_DATA 2
+#define CONN_S_CLOSE 3
+#define CONN_S_RESET 4
+#define CONN_S_TIMED_OUT 5
+#define CONN_S_EXITING   6	/* conn is exiting; last chance to get data */
 
 
 enum {
@@ -134,44 +132,63 @@ static void add2buf(struct app_conn_stream * rcv, char *data, int datalen)
 	rcv->count += datalen;
 }
 
-#if 0
-static void ride_lurkers(struct tcp_stream * cp, char mask)
-{
-	struct lurker_node *i;
-	char cc, sc, ccu, scu;
-
-	for (i = cp->listeners; i; i = i->next){
-		if (i->whatto & mask) {
-			cc = cp->client.collect;
-			sc = cp->server.collect;
-			ccu = cp->client.collect_urg;
-			scu = cp->server.collect_urg;
-
-			(i->item) (cp, &i->data);
-			if (cc < cp->client.collect)
-				i->whatto |= COLLECT_cc;
-			if (ccu < cp->client.collect_urg)
-				i->whatto |= COLLECT_ccu;
-			if (sc < cp->server.collect)
-				i->whatto |= COLLECT_sc;
-			if (scu < cp->server.collect_urg)
-				i->whatto |= COLLECT_scu;
-			if (cc > cp->client.collect)
-				i->whatto &= ~COLLECT_cc;
-			if (ccu > cp->client.collect_urg)
-				i->whatto &= ~COLLECT_ccu;
-			if (sc > cp->server.collect)
-				i->whatto &= ~COLLECT_sc;
-			if (scu > cp->server.collect_urg)
-				i->whatto &= ~COLLECT_scu;
+static void lurkers(struct app_conn *cp, char mask){
+	if (cp->state == CONN_S_CLOSE){
+		return;
+	}
+	if (cp->state == CONN_S_TIMED_OUT){
+		// todo: remove report_handle from app_conn_table->rpt timeout
+		return;
+	}
+	if (cp->state == CONN_S_RESET){
+		return;
+	}
+	if (cp->state == CONN_S_DATA){
+		switch (mask) {
+			case COLLECT_ccu:
+				RTE_LOG(DEBUG, USER3, 
+						"TCP "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u "
+						"urgdata:%c\n", 
+						NIPQUAD(cp->client.key.addr[0]), 
+						rte_be_to_cpu_16(cp->client.key.port[0]),
+						NIPQUAD(cp->client.key.addr[1]), 
+						rte_be_to_cpu_16(cp->client.key.port[1]),
+						cp->client.urgdata);
+				break;
+			case COLLECT_scu:
+				RTE_LOG(DEBUG, USER3, 
+						"TCP "NIPQUAD_FMT":%u<-"NIPQUAD_FMT":%u "
+						"urgdata:%c\n", 
+						NIPQUAD(cp->client.key.addr[0]), 
+						rte_be_to_cpu_16(cp->client.key.port[0]),
+						NIPQUAD(cp->client.key.addr[1]), 
+						rte_be_to_cpu_16(cp->client.key.port[1]),
+						cp->server.urgdata);
+				break;
+			case COLLECT_cc:
+				RTE_LOG(DEBUG, USER3, 
+						"TCP "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u "
+						"urgdata:%.*s\n", 
+						NIPQUAD(cp->client.key.addr[0]), 
+						rte_be_to_cpu_16(cp->client.key.port[0]),
+						NIPQUAD(cp->client.key.addr[1]), 
+						rte_be_to_cpu_16(cp->client.key.port[1]),
+						cp->client.count_new, cp->client.data);
+				break;
+			case COLLECT_sc:
+				RTE_LOG(DEBUG, USER3, 
+						"TCP "NIPQUAD_FMT":%u<-"NIPQUAD_FMT":%u "
+						"data:%.*s\n", 
+						NIPQUAD(cp->client.key.addr[0]), 
+						rte_be_to_cpu_16(cp->client.key.port[0]),
+						NIPQUAD(cp->client.key.addr[1]), 
+						rte_be_to_cpu_16(cp->client.key.port[1]),
+						cp->server.count_new, cp->server.data);
+				break;
+			default:
+				break;
 		}
 	}
-}
-#endif
-
-static void lurkers(struct app_conn *cp, char mask){
-	if( cp && mask)
-		return;
 }
 
 static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
@@ -214,19 +231,6 @@ static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
 		// we know that if one_loop_less!=0, we have only one callback to notify
 		rcv->count_new=0;	    
 	}
-//prune_listeners:
-//	prev_addr = &cp->listeners;
-//	i = cp->listeners;
-//	while (i)
-//		if (!i->whatto) {
-//			*prev_addr = i->next;
-//			free(i);
-//			i = *prev_addr;
-//		}
-//		else {
-//			prev_addr = &i->next;
-//			i = i->next;
-//		}
 }
 
 static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
