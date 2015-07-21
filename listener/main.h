@@ -40,7 +40,6 @@
 #include <rte_mbuf.h>
 #include <rte_ip.h>
 #include <rte_ip_frag.h>
-#include <rte_tcp.h>
 #include <rte_lpm.h>
 
 

@@ -67,9 +67,9 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 #include <rte_ip.h>
-#include <rte_tcp.h>
 #include <rte_lpm.h>
 #include <rte_timer.h>
+#include <netinet/tcp.h>
 #include "utils.h"
 
 #include "main.h"

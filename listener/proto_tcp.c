@@ -5,6 +5,7 @@
 #include "main.h"
 #include "utils.h"
 #include "sender.h"
+#include "tcp.h"
 
 #define CONN_S_JUST_EST 1
 #define CONN_S_DATA 2
@@ -13,20 +14,6 @@
 #define CONN_S_TIMED_OUT 5
 #define CONN_S_EXITING   6	/* conn is exiting; last chance to get data */
 
-
-enum {
-  TCP_ESTABLISHED = 1,
-  TCP_SYN_SENT,
-  TCP_SYN_RECV,
-  TCP_FIN_WAIT1,
-  TCP_FIN_WAIT2,
-  TCP_TIME_WAIT,
-  TCP_CLOSE,
-  TCP_CLOSE_WAIT,
-  TCP_LAST_ACK,
-  TCP_LISTEN,
-  TCP_CLOSING			/* now a valid state */
-};
 
 
 #define FIN_SENT 120
@@ -40,13 +27,13 @@ enum {
 
 
 
-static int get_ts(struct tcp_hdr * tcp_hdr, uint32_t  *ts)
+static int get_ts(struct tcphdr * tcphdr, uint32_t  *ts)
 {
-	int len = 4 * tcp_hdr->data_off;
+	int len = 4 * tcphdr->th_off;
 	uint32_t  tmp_ts;
-	unsigned char * options = (unsigned char*)(tcp_hdr + 1);
+	unsigned char * options = (unsigned char*)(tcphdr + 1);
 	int ind = 0, ret = 0;
-	while (ind <=  len - (int)sizeof (struct tcp_hdr) - 10 ){
+	while (ind <=  len - (int)sizeof (struct tcphdr) - 10 ){
 		switch (options[ind]) {
 			case 0: /* TCPOPT_EOL */
 				return ret;
@@ -67,14 +54,14 @@ static int get_ts(struct tcp_hdr * tcp_hdr, uint32_t  *ts)
 	return ret;
 }  		
 
-static int get_wscale(struct tcp_hdr * tcp_hdr, uint32_t * ws)
+static int get_wscale(struct tcphdr * tcphdr, uint32_t * ws)
 {
-	int len = 4 * tcp_hdr->data_off;
+	int len = 4 * tcphdr->th_off;
 	uint32_t tmp_ws;
-	unsigned char * options = (unsigned char*)(tcp_hdr + 1);
+	unsigned char * options = (unsigned char*)(tcphdr + 1);
 	int ind = 0, ret = 0;
 	*ws=1;
-	while (ind <=  len - (int)sizeof (struct tcp_hdr) - 3 ){
+	while (ind <=  len - (int)sizeof (struct tcphdr) - 3 ){
 		switch (options[ind]) {
 			case 0: /* TCPOPT_EOL */
 				return ret;
@@ -132,7 +119,25 @@ static void add2buf(struct app_conn_stream * rcv, char *data, int datalen)
 	rcv->count += datalen;
 }
 
+
+
 static void lurkers(struct app_conn *cp, char mask){
+#define LOG_ADDR(a) do{ \
+	RTE_LOG(DEBUG, USER3, \
+			"TCP "NIPQUAD_FMT":%u"#a NIPQUAD_FMT":%u ", \
+			NIPQUAD(cp->client.key.addr[0]), \
+			rte_be_to_cpu_16(cp->client.key.port[0]), \
+			NIPQUAD(cp->client.key.addr[1]),  \
+			rte_be_to_cpu_16(cp->client.key.port[1]) \
+			); \
+}while(0)
+
+	LOG_ADDR(->);
+	RTE_LOG(DEBUG, USER2, "state:%d\n", cp->state);
+
+	if (cp->state == CONN_S_JUST_EST){
+		return;
+	}
 	if (cp->state == CONN_S_CLOSE){
 		return;
 	}
@@ -146,43 +151,21 @@ static void lurkers(struct app_conn *cp, char mask){
 	if (cp->state == CONN_S_DATA){
 		switch (mask) {
 			case COLLECT_ccu:
-				RTE_LOG(DEBUG, USER3, 
-						"TCP "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u "
-						"urgdata:%c\n", 
-						NIPQUAD(cp->client.key.addr[0]), 
-						rte_be_to_cpu_16(cp->client.key.port[0]),
-						NIPQUAD(cp->client.key.addr[1]), 
-						rte_be_to_cpu_16(cp->client.key.port[1]),
-						cp->client.urgdata);
+				LOG_ADDR(->);
+				RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->client.urgdata);
 				break;
 			case COLLECT_scu:
-				RTE_LOG(DEBUG, USER3, 
-						"TCP "NIPQUAD_FMT":%u<-"NIPQUAD_FMT":%u "
-						"urgdata:%c\n", 
-						NIPQUAD(cp->client.key.addr[0]), 
-						rte_be_to_cpu_16(cp->client.key.port[0]),
-						NIPQUAD(cp->client.key.addr[1]), 
-						rte_be_to_cpu_16(cp->client.key.port[1]),
-						cp->server.urgdata);
+				LOG_ADDR(<-);
+				RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->server.urgdata);
 				break;
 			case COLLECT_cc:
-				RTE_LOG(DEBUG, USER3, 
-						"TCP "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u "
-						"urgdata:%.*s\n", 
-						NIPQUAD(cp->client.key.addr[0]), 
-						rte_be_to_cpu_16(cp->client.key.port[0]),
-						NIPQUAD(cp->client.key.addr[1]), 
-						rte_be_to_cpu_16(cp->client.key.port[1]),
+				LOG_ADDR(->);
+				RTE_LOG(DEBUG, USER2, "urgdata:%.*s\n", 
 						cp->client.count_new, cp->client.data);
 				break;
 			case COLLECT_sc:
-				RTE_LOG(DEBUG, USER3, 
-						"TCP "NIPQUAD_FMT":%u<-"NIPQUAD_FMT":%u "
-						"data:%.*s\n", 
-						NIPQUAD(cp->client.key.addr[0]), 
-						rte_be_to_cpu_16(cp->client.key.port[0]),
-						NIPQUAD(cp->client.key.addr[1]), 
-						rte_be_to_cpu_16(cp->client.key.port[1]),
+				LOG_ADDR(<-);
+				RTE_LOG(DEBUG, USER2, "data:%.*s\n", 
 						cp->server.count_new, cp->server.data);
 				break;
 			default:
@@ -296,26 +279,28 @@ static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 	}
 }
 
-static void tcp_queue(struct app_conn * cp, struct tcp_hdr * tcp_hdr,
+static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 		struct app_conn_stream * snd, struct app_conn_stream * rcv,
 		char *data, int datalen, int skblen
 		)
 {
-	uint32_t this_seq = rte_be_to_cpu_32(tcp_hdr->sent_seq);
+	uint32_t this_seq = rte_be_to_cpu_32(tcphdr->th_seq);
 	struct skbuff *pakiet, *tmp;
 
 	/*
 	 * Did we get anything new to ack?
 	 */
 
+	//RTE_LOG(DEBUG, USER3, "seq:%u, exp_seq:%u\n", this_seq, EXP_SEQ);
+
 	if (!after(this_seq, EXP_SEQ)) {
-		if (after(this_seq + datalen + (tcp_hdr->tcp_flags & TCP_FIN_FLAG), EXP_SEQ)) {
+		if (after(this_seq + datalen + (tcphdr->th_flags & TH_FIN), EXP_SEQ)) {
 			/* the packet straddles our window end */
-			get_ts(tcp_hdr, &snd->curr_ts);
+			get_ts(tcphdr, &snd->curr_ts);
 			add_from_skb(cp, rcv, snd, (u_char *)data, datalen, this_seq,
-					(tcp_hdr->tcp_flags & TCP_FIN_FLAG),
-					(tcp_hdr->tcp_flags & TCP_URG_FLAG),
-					rte_be_to_cpu_16(tcp_hdr->tcp_urp) + this_seq - 1);
+					(tcphdr->th_flags & TH_FIN),
+					(tcphdr->th_flags & TH_URG),
+					rte_be_to_cpu_16(tcphdr->th_urp) + this_seq - 1);
 			/*
 			 * Do we have any old packets to ack that the above
 			 * made visible? (Go forward from skb)
@@ -343,11 +328,10 @@ static void tcp_queue(struct app_conn * cp, struct tcp_hdr * tcp_hdr,
 				free(pakiet);
 				pakiet = tmp;
 			}
-		}
-		else
+		} else {
 			return;
-	}
-	else {
+		}
+	} else {
 		struct skbuff *p = rcv->listtail;
 
 		pakiet = (struct skbuff *)malloc(sizeof(struct skbuff));
@@ -364,7 +348,7 @@ static void tcp_queue(struct app_conn * cp, struct tcp_hdr * tcp_hdr,
 			return;
 		}
 		memcpy(pakiet->data, data, datalen);
-		pakiet->fin = (tcp_hdr->tcp_flags & TCP_FIN_FLAG);
+		pakiet->fin = (tcphdr->th_flags & TH_FIN);
 		/* Some Cisco - at least - hardware accept to close a TCP connection
 		 * even though packets were lost before the first TCP FIN packet and
 		 * never retransmitted; this violates RFC 793, but since it really
@@ -379,8 +363,8 @@ static void tcp_queue(struct app_conn * cp, struct tcp_hdr * tcp_hdr,
 			//	add_tcp_closing_timeout(cp);
 		}
 		pakiet->seq = this_seq;
-		pakiet->urg = (tcp_hdr->tcp_flags & TCP_URG_FLAG);
-		pakiet->urg_ptr = rte_be_to_cpu_16(tcp_hdr->tcp_urp);
+		pakiet->urg = (tcphdr->th_flags & TH_URG);
+		pakiet->urg_ptr = rte_be_to_cpu_16(tcphdr->th_urp);
 		for (;;) {
 			if (!p || !after(p->seq, this_seq))
 				break;
@@ -394,8 +378,7 @@ static void tcp_queue(struct app_conn * cp, struct tcp_hdr * tcp_hdr,
 			rcv->list = pakiet;
 			if (!rcv->listtail)
 				rcv->listtail = pakiet;
-		}
-		else {
+		} else {
 			pakiet->next = p->next;
 			p->next = pakiet;
 			pakiet->prev = p;
@@ -418,7 +401,7 @@ static void handle_ack(struct app_conn_stream * snd, uint32_t acknum)
 }
 #if 0
 	static void
-check_flags(struct ip * iph, struct tcp_hdr * th)
+check_flags(struct ip * iph, struct tcphdr * th)
 {
 	u_char flag = *(((u_char *) th) + 13);
 	if (flag & 0x40 || flag & 0x80)
@@ -426,44 +409,6 @@ check_flags(struct ip * iph, struct tcp_hdr * th)
 	//ECN is really the only cause of these warnings...
 }
 
-struct tcp_stream * find_stream(struct tcp_hdr * tcp_hdr, struct ip * this_iphdr,
-		int *from_client)
-{
-	struct tuple4 this_addr, reversed;
-	struct tcp_stream *cp;
-
-	this_addr.source = rte_be_to_cpu_16(tcp_hdr->th_sport);
-	this_addr.dest = rte_be_to_cpu_16(tcp_hdr->th_dport);
-	this_addr.saddr = this_iphdr->ip_src.s_addr;
-	this_addr.daddr = this_iphdr->ip_dst.s_addr;
-	cp = nids_find_tcp_stream(&this_addr);
-	if (cp) {
-		*from_client = 1;
-		return cp;
-	}
-	reversed.source = rte_be_to_cpu_16(tcp_hdr->th_dport);
-	reversed.dest = rte_be_to_cpu_16(tcp_hdr->th_sport);
-	reversed.saddr = this_iphdr->ip_dst.s_addr;
-	reversed.daddr = this_iphdr->ip_src.s_addr;
-	cp = nids_find_tcp_stream(&reversed);
-	if (cp) {
-		*from_client = 0;
-		return cp;
-	}
-	return 0;
-}
-
-struct tcp_stream * nids_find_tcp_stream(struct tuple4 *addr)
-{
-	int hash_index;
-	struct tcp_stream *cp;
-
-	hash_index = mk_hash_index(*addr);
-	for (cp = tcp_stream_table[hash_index];
-			cp && memcmp(&cp->addr, addr, sizeof (struct tuple4));
-			cp = cp->next_node);
-	return cp ? cp : 0;
-}
 
 #if HAVE_ICMPHDR
 #define STRUCT_ICMP struct icmphdr
@@ -487,7 +432,7 @@ void process_icmp(u_char * data)
 	struct ip *iph = (struct ip *) data;
 	struct ip *orig_ip;
 	STRUCT_ICMP *pkt;
-	struct tcp_hdr *th;
+	struct tcphdr *th;
 	struct half_stream *hlf;
 	int match_addr;
 	struct tcp_stream *cp;
@@ -529,7 +474,7 @@ void process_icmp(u_char * data)
 		return;
 	if (orig_ip->ip_p != IPPROTO_TCP)
 		return;
-	th = (struct tcp_hdr *) (((char *) orig_ip) + (orig_ip->ip_hl << 2));
+	th = (struct tcphdr *) (((char *) orig_ip) + (orig_ip->ip_hl << 2));
 	if (!(cp = find_stream(th, orig_ip, &from_client)))
 		return;
 	if (cp->addr.dest == iph->ip_dst.s_addr)
@@ -547,7 +492,7 @@ void process_icmp(u_char * data)
 
 static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 		const struct app_conn_key *key, uint64_t tms, 
-		struct app_protocol *pp, struct tcp_hdr *tcp_hdr)
+		struct app_protocol *pp, struct tcphdr *tcphdr)
 {
 	/* todo: reset conn counter */
 	memset(cp, 0, sizeof(*cp));
@@ -568,11 +513,11 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->client.start = tms;
 	cp->client.last = tms;
 
-	cp->client.seq = rte_be_to_cpu_32(tcp_hdr->sent_seq) + 1;
+	cp->client.seq = rte_be_to_cpu_32(tcphdr->th_seq) + 1;
 	cp->client.first_data_seq = cp->client.seq;
-	cp->client.window = rte_be_to_cpu_16(tcp_hdr->rx_win);
-	cp->client.ts_on = get_ts(tcp_hdr, &cp->client.curr_ts);
-	cp->client.wscale_on = get_wscale(tcp_hdr, &cp->client.wscale);
+	cp->client.window = rte_be_to_cpu_16(tcphdr->th_win);
+	cp->client.ts_on = get_ts(tcphdr, &cp->client.curr_ts);
+	cp->client.wscale_on = get_wscale(tcphdr, &cp->client.wscale);
 
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 	TAILQ_INSERT_TAIL(&tbl->rpt, cp, rpt);
@@ -590,7 +535,7 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
  */
 static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		struct app_conn_tbl *tbl, const struct app_conn_key *key, 
-		uint64_t tms, uint32_t *from_client, struct tcp_hdr *tcp_hdr)
+		uint64_t tms, uint32_t *from_client, struct tcphdr *tcphdr)
 {
 	struct app_conn *cp, *free, *stale, *lru;
 	uint64_t max_cycles;
@@ -633,16 +578,16 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 		if (free != NULL ){
 #if 1
 			/* add conn when syn and dst_addr in ip_list */
-			if ((tcp_hdr->tcp_flags & TCP_SYN_FLAG) && 
-					!(tcp_hdr->tcp_flags & TCP_ACK_FLAG) &&
-					!(tcp_hdr->tcp_flags & TCP_RST_FLAG) &&
+			if ((tcphdr->th_flags & TH_SYN) && 
+					!(tcphdr->th_flags & TH_ACK) &&
+					!(tcphdr->th_flags & TH_RST) &&
 					radix32tree_find(app.ip_list, rte_be_to_cpu_32(key->addr[1]))) {
-				tcp_conn_add(tbl,  free, key, tms, pp, tcp_hdr);
+				tcp_conn_add(tbl,  free, key, tms, pp, tcphdr);
 				cp = free;
 				*from_client = 1;
 			}
 #else
-			tcp_conn_add(tbl,  free, key, tms, pp, tcp_hdr);
+			tcp_conn_add(tbl,  free, key, tms, pp, tcphdr);
 			cp = free;
 #endif
 		}
@@ -688,54 +633,59 @@ static struct app_conn * tcp_conn_get(struct app_protocol *pp, struct app_conn_t
 	struct app_conn_key key;
 	//const uint64_t *psd;
 	//uint16_t ip_len;
-	struct tcp_hdr *tcp_hdr = NULL;
+	struct tcphdr *tcphdr = NULL;
 	int32_t datalen, iplen;
 
 
 	iplen = rte_be_to_cpu_32(ip_hdr->total_length);
 
-	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct tcp_hdr)){
+	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct tcphdr)){
 		return NULL;
 	}
 
-	tcp_hdr = (struct tcp_hdr *)((char *)ip_hdr + ip_hdr_offset);
+	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
 
-	datalen = iplen - ip_hdr_offset - 4 * tcp_hdr->data_off;
+	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
 	if(datalen < 0){
 		return NULL;
 	}
 
 	/* use first 8 bytes only */
 	key.src_dst_addr = *((uint64_t *)&ip_hdr->src_addr);
-	key.src_dst_port = *((uint32_t *)tcp_hdr);
+	key.src_dst_port = *((uint32_t *)tcphdr);
 	if(key.src_dst_addr == 0 ){
 		return NULL;
 	}
 
 	/* try to find/add entry into the connection table. */
 	return tcp_conn_find(pp, mb, tbl, &key, tms, 
-			from_client, tcp_hdr);
+			from_client, tcphdr);
 }
 
-/*
-   static void tcp_process(struct app_protocol *pp, struct app_conn *cp){
-
-   }
-   */
 static void tcp_process_handle(
 		struct app_conn_tbl *tbl,
 		struct app_conn *cp, __attribute__((unused))struct rte_mbuf *mb, 
 		uint64_t tms, struct ipv4_hdr *ip_hdr, 
 		__attribute__((unused))size_t ip_hdr_offset, uint32_t from_client){
 	struct app_conn_stream *snd, *rcv;
-	struct tcp_hdr *tcp_hdr = NULL;
+	struct tcphdr *tcphdr = NULL;
 	int datalen, iplen;
 	uint32_t tmp_ts;
 
+
 	iplen = rte_be_to_cpu_16(ip_hdr->total_length);
-	tcp_hdr = (struct tcp_hdr *)((char *)ip_hdr + ip_hdr_offset);
+	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
 	
-	datalen = iplen - ip_hdr_offset - 4 * tcp_hdr->data_off;
+	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
+	if(datalen < 0){
+		RTE_LOG(DEBUG, USER5, "datalen:%d, iplen:%d, ip_hdr_offset:%d, tcphdr->th_off*4:%d\n",
+				datalen, iplen, (int)ip_hdr_offset, 4*tcphdr->th_off);
+		return;
+	}
+
+	if(mb->next){
+		rte_pktmbuf_dump(stdout, mb, 256);
+	}
 
 	if(from_client){
 		snd = &cp->client;
@@ -745,30 +695,30 @@ static void tcp_process_handle(
 		snd = &cp->server;
 	}
 
-	if((tcp_hdr->tcp_flags & TCP_SYN_FLAG)){
+	if((tcphdr->th_flags & TH_SYN)){
 		if(from_client){
 			return;
 		}
 		if(cp->client.state != TCP_SYN_SENT || 
-				cp->server.state != TCP_CLOSE || !(tcp_hdr->tcp_flags & TCP_ACK_FLAG))
+				cp->server.state != TCP_CLOSE || !(tcphdr->th_flags & TH_ACK))
 			return;
-		if(cp->client.seq != rte_be_to_cpu_32(tcp_hdr->recv_ack))
+		if(cp->client.seq != rte_be_to_cpu_32(tcphdr->th_ack))
 			return;
 		cp->last = tms;
 		cp->server.state = TCP_SYN_RECV;
-		cp->server.seq = rte_be_to_cpu_32(tcp_hdr->sent_seq) + 1;
+		cp->server.seq = rte_be_to_cpu_32(tcphdr->th_seq) + 1;
 		cp->server.first_data_seq = cp->server.seq;
-		cp->server.ack_seq = rte_be_to_cpu_32(tcp_hdr->recv_ack);
-		cp->server.window = rte_be_to_cpu_16(tcp_hdr->rx_win);
+		cp->server.ack_seq = rte_be_to_cpu_32(tcphdr->th_ack);
+		cp->server.window = rte_be_to_cpu_16(tcphdr->th_win);
 		if(cp->client.ts_on){
-			cp->server.ts_on = get_ts(tcp_hdr, &cp->server.curr_ts);
+			cp->server.ts_on = get_ts(tcphdr, &cp->server.curr_ts);
 			if(!cp->server.ts_on)
 				cp->client.ts_on = 0;
 		}else{
 			cp->server.ts_on = 0;
 		}
 		if(cp->client.wscale_on){
-			cp->server.wscale_on = get_wscale(tcp_hdr, &cp->server.wscale);
+			cp->server.wscale_on = get_wscale(tcphdr, &cp->server.wscale);
 			if (!cp->server.wscale_on) {
 				cp->client.wscale_on = 0;
 				cp->client.wscale  = 1;
@@ -780,12 +730,17 @@ static void tcp_process_handle(
 		}
 		goto out;
 	}
-	if (!(!datalen && rte_be_to_cpu_32(tcp_hdr->sent_seq) == rcv->ack_seq) &&
-			(!before(rte_be_to_cpu_32(tcp_hdr->sent_seq), rcv->ack_seq + rcv->window*rcv->wscale) ||
-			  before(rte_be_to_cpu_32(tcp_hdr->sent_seq) + datalen, rcv->ack_seq)))     
+	if (!(!datalen && rte_be_to_cpu_32(tcphdr->th_seq) == rcv->ack_seq) &&
+			(!before(rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq + rcv->window*rcv->wscale) ||
+			  before(rte_be_to_cpu_32(tcphdr->th_seq) + datalen, rcv->ack_seq))){
+		/*
+		RTE_LOG(DEBUG, USER5, "datalen:%d th_seq:%u ack_seq:%u, rcv->window:%u, rcv->wsale:%u\n",
+				datalen, rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq, rcv->window, rcv->wscale);
+				*/
 		return;
+	}
 
-	if ((tcp_hdr->tcp_flags & TCP_RST_FLAG)) {
+	if ((tcphdr->th_flags & TH_RST)) {
 		if (cp->state == CONN_S_DATA) {
 			cp->state = CONN_S_RESET;
 		}
@@ -796,28 +751,29 @@ static void tcp_process_handle(
 	}
 
 	/* PAWS check */
-	if (rcv->ts_on && get_ts(tcp_hdr, &tmp_ts) && 
+	if (rcv->ts_on && get_ts(tcphdr, &tmp_ts) && 
 			before(tmp_ts, snd->curr_ts))
 		return; 
 
-	if ((tcp_hdr->tcp_flags & TCP_ACK_FLAG)) {
+	if ((tcphdr->th_flags & TH_ACK)) {
 		if (from_client && cp->client.state == TCP_SYN_SENT &&
 				cp->server.state == TCP_SYN_RECV) {
-			if (rte_be_to_cpu_32(tcp_hdr->recv_ack) == cp->server.seq) {
+			if (rte_be_to_cpu_32(tcphdr->th_ack) == cp->server.seq) {
 				cp->client.state = TCP_ESTABLISHED;
-				cp->client.ack_seq = rte_be_to_cpu_32(tcp_hdr->recv_ack);
+				cp->client.ack_seq = rte_be_to_cpu_32(tcphdr->th_ack);
 				cp->last = tms;
 				//cp->ts = nids_last_pcap_header->ts.tv_sec;
 
 				cp->server.state = TCP_ESTABLISHED;
-				//cp->nids_state = CONN_S_JUST_EST;
+				cp->state = CONN_S_JUST_EST;
+				lurkers(cp, 0);
 				cp->state = CONN_S_DATA;
 			}
 			// return;
 		}
 	}
-	if ((tcp_hdr->tcp_flags & TCP_ACK_FLAG)) {
-		handle_ack(snd, rte_be_to_cpu_32(tcp_hdr->recv_ack));
+	if ((tcphdr->th_flags & TH_ACK)) {
+		handle_ack(snd, rte_be_to_cpu_32(tcphdr->th_ack));
 		if (rcv->state == FIN_SENT)
 			rcv->state = FIN_CONFIRMED;
 		if (rcv->state == FIN_CONFIRMED && snd->state == FIN_CONFIRMED) {
@@ -829,12 +785,12 @@ static void tcp_process_handle(
 			return;
 		}
 	}
-	if (datalen + (tcp_hdr->tcp_flags & TCP_FIN_FLAG) > 0){
-		tcp_queue(cp, tcp_hdr, snd, rcv,
-				(char *) (tcp_hdr) + 4 * tcp_hdr->data_off,
+	if (datalen + (tcphdr->th_flags & TH_FIN) > 0){
+		tcp_queue(cp, tcphdr, snd, rcv,
+				(char *) (tcphdr) + 4 * tcphdr->th_off,
 				datalen, mb->buf_len);
 	}
-	snd->window = rte_be_to_cpu_16(tcp_hdr->rx_win);
+	snd->window = rte_be_to_cpu_16(tcphdr->th_win);
 	if (rcv->rmem_alloc > 65535)
 		prune_queue(rcv);
 
