@@ -5,6 +5,7 @@
 #include "main.h"
 #include "utils.h"
 #include "sender.h"
+#include <rte_udp.h>
 
 /* #################### UDP ###################### */
 static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
@@ -36,7 +37,7 @@ static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 
 static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		struct app_conn_tbl *tbl, const struct app_conn_key *key, 
-		uint64_t tms, uint32_t *from_client)
+		uint64_t tms, int *from_client)
 {
 	struct app_conn *cp, *free, *stale, *lru;
 	uint64_t max_cycles;
@@ -111,44 +112,48 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 	return (cp);
 }
 
-static struct app_conn * udp_conn_get(struct app_protocol *pp, struct app_conn_tbl *tbl,
-		struct rte_mbuf *mb, uint64_t tms, struct ipv4_hdr *ip_hdr, 
-		size_t ip_hdr_offset, uint32_t *from_client)
-{
-	//struct app_conn *cp;
+static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl,
+		struct rte_mbuf *mb, uint64_t tms, struct ipv4_hdr *ip_hdr){
+	struct app_conn_stream *sp;
+	struct app_conn *cp;
 	struct app_conn_key key;
-	//const uint64_t *psd;
-	//uint16_t ip_len;
 	struct udp_hdr *udp_hdr = NULL;
-	//uint16_t flag_offset, ip_ofs, ip_flag;
+	size_t ip_hdr_offset;
+	int32_t datalen, iplen;
+	int from_client;
 
-	//flag_offset = rte_be_to_cpu_16(ip_hdr->fragment_offset);
-	//ip_ofs = (uint16_t)(flag_offset & IPV4_HDR_OFFSET_MASK);
-	//ip_flag = (uint16_t)(flag_offset & IPV4_HDR_MF_FLAG);
-
-	//psd = (uint64_t *)&ip_hdr->src_addr;
-	/* use first 8 bytes only */
-	key.src_dst_addr = *((uint64_t *)&ip_hdr->src_addr);
-
+	iplen = rte_be_to_cpu_16(ip_hdr->total_length);
+	ip_hdr_offset = (ip_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
+			IPV4_IHL_MULTIPLIER;
 	udp_hdr = (struct udp_hdr *)((char *)ip_hdr + ip_hdr_offset);
+
+
+	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct udp_hdr)){
+		RTE_LOG(WARNING, USER5, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct udp_hdr)(%lu)\n",
+				iplen, (int)ip_hdr_offset, sizeof(struct udp_hdr));
+		return;
+	}
+	datalen = rte_be_to_cpu_16(udp_hdr->dgram_len);
+	if(iplen - (int32_t)ip_hdr_offset < datalen || datalen < (int32_t)sizeof(struct udp_hdr)){
+		RTE_LOG(WARNING, USER5, "datalen warning(%d)\n", datalen);
+		return;
+	}
+
+
+	key.src_dst_addr = *((uint64_t *)&ip_hdr->src_addr);
 	key.src_dst_port = *((uint32_t *)udp_hdr);
 
-	//ip_ofs *= IPV4_HDR_OFFSET_UNITS;
-	//ip_len = (uint16_t)(rte_be_to_cpu_16(ip_hdr->total_length) -
-	//	mb->l3_len);
+	
+	if((cp = udp_conn_find(pp, mb, tbl, &key, tms, &from_client)) == NULL){
+		APP_CONN_TBL_STAT_UPDATE(&tbl->stat, conn_miss, 1);
+		return;
+	}
 
-	/* try to find/add entry into the connection table. */
-	return udp_conn_find(pp, mb, tbl, &key, tms, 
-			from_client);
-}
+	// todo: fixit
+	if(mb->next){
+		rte_pktmbuf_dump(stdout, mb, 256);
+	}
 
-static void udp_process_handle(struct app_conn_tbl *tbl,
-		struct app_conn * cp, __attribute__((unused))struct rte_mbuf *mb, 
-		uint64_t tms, struct ipv4_hdr *ip_hdr, 
-		__attribute__((unused))size_t ip_hdr_offset, uint32_t from_client){
-	struct app_conn_stream *sp;
-	//struct tcp_hdr *tcp_hdr = NULL;
-	//tcp_hdr = (struct tcp_hdr *)((char *)ipv4_hdr + ip_hdr_offset);
 	if(from_client){
 		sp = &cp->client;
 	}else{
@@ -181,7 +186,7 @@ struct app_protocol app_protocol_udp = {
 	.name = (char *)"UDP",                        
 	.protocol = IPPROTO_UDP,              
 	.init = NULL,               
-	.conn_get = udp_conn_get,       
+	//.conn_get = udp_conn_get,       
 	.debug_packet = tcpudp_debug_packet,
 	.process_handle = udp_process_handle,
 	.report_handle = tcpudp_report_handle,

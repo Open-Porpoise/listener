@@ -6,6 +6,7 @@
 #include "utils.h"
 #include "sender.h"
 #include "tcp.h"
+#include <rte_hexdump.h>
 
 #define CONN_S_JUST_EST 1
 #define CONN_S_DATA 2
@@ -160,13 +161,19 @@ static void lurkers(struct app_conn *cp, char mask){
 				break;
 			case COLLECT_cc:
 				LOG_ADDR(->);
-				RTE_LOG(DEBUG, USER2, "urgdata:%.*s\n", 
-						cp->client.count_new, cp->client.data);
+				//RTE_LOG(DEBUG, USER2, "client data:%.*s\n", 
+						//cp->client.count_new, cp->client.data);
+				RTE_LOG(DEBUG, USER2, "client datalen:%d\n", 
+						cp->client.count_new);
 				break;
 			case COLLECT_sc:
 				LOG_ADDR(<-);
+				/*
 				RTE_LOG(DEBUG, USER2, "data:%.*s\n", 
 						cp->server.count_new, cp->server.data);
+						*/
+				RTE_LOG(DEBUG, USER2, "server datalen:%d\n", 
+						cp->server.count_new);
 				break;
 			default:
 				break;
@@ -191,29 +198,27 @@ static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
 		//goto prune_listeners;
 		return;
 	}
-	if (rcv->collect) {
-		if (rcv == &cp->client)
-			mask = COLLECT_cc;
-		else
-			mask = COLLECT_sc;
-		do {
-			int total;
-			cp->read = rcv->count - rcv->offset;
-			total = cp->read;
+	if (rcv == &cp->client)
+		mask = COLLECT_cc;
+	else
+		mask = COLLECT_sc;
+	do {
+		int total;
+		cp->read = rcv->count - rcv->offset;
+		total = cp->read;
 
-			//ride_lurkers(cp, mask);
-			lurkers(cp, mask);
-			if (cp->read > total - rcv->count_new)
-				rcv->count_new = total - cp->read;
+		//ride_lurkers(cp, mask);
+		lurkers(cp, mask);
+		if (cp->read > total - rcv->count_new)
+			rcv->count_new = total - cp->read;
 
-			if (cp->read > 0) {
-				memmove(rcv->data, rcv->data + cp->read, rcv->count - rcv->offset - cp->read);
-				rcv->offset += cp->read;
-			}
-		}while (cp->read>0 && rcv->count_new); 
-		// we know that if one_loop_less!=0, we have only one callback to notify
-		rcv->count_new=0;	    
-	}
+		if (cp->read > 0) {
+			memmove(rcv->data, rcv->data + cp->read, rcv->count - rcv->offset - cp->read);
+			rcv->offset += cp->read;
+		}
+	}while (cp->read>0 && rcv->count_new); 
+	// we know that if one_loop_less!=0, we have only one callback to notify
+	rcv->count_new=0;	    
 }
 
 static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
@@ -233,14 +238,8 @@ static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 			before(rcv->urg_ptr, this_seq + datalen)) {
 		to_copy = rcv->urg_ptr - (this_seq + lost);
 		if (to_copy > 0) {
-			if (rcv->collect) {
-				add2buf(rcv, (char *)(data + lost), to_copy);
-				notify(cp, rcv);
-			}
-			else {
-				rcv->count += to_copy;
-				rcv->offset = rcv->count; /* clear the buffer */
-			}
+			add2buf(rcv, (char *)(data + lost), to_copy);
+			notify(cp, rcv);
 		}
 		rcv->urgdata = data[rcv->urg_ptr - this_seq];
 		rcv->count_new_urg = 1;
@@ -250,26 +249,13 @@ static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 		rcv->urg_count++;
 		to_copy2 = this_seq + datalen - rcv->urg_ptr - 1;
 		if (to_copy2 > 0) {
-			if (rcv->collect) {
-				add2buf(rcv, (char *)(data + lost + to_copy + 1), to_copy2);
-				notify(cp, rcv);
-			}
-			else {
-				rcv->count += to_copy2;
-				rcv->offset = rcv->count; /* clear the buffer */
-			}
+			add2buf(rcv, (char *)(data + lost + to_copy + 1), to_copy2);
+			notify(cp, rcv);
 		}
-	}
-	else {
+	} else {
 		if (datalen - lost > 0) {
-			if (rcv->collect) {
-				add2buf(rcv, (char *)(data + lost), datalen - lost);
-				notify(cp, rcv);
-			}
-			else {
-				rcv->count += datalen - lost;
-				rcv->offset = rcv->count; /* clear the buffer */
-			}
+			add2buf(rcv, (char *)(data + lost), datalen - lost);
+			notify(cp, rcv);
 		}
 	}
 	if (fin) {
@@ -295,6 +281,7 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 
 	if (!after(this_seq, EXP_SEQ)) {
 		if (after(this_seq + datalen + (tcphdr->th_flags & TH_FIN), EXP_SEQ)) {
+			RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			/* the packet straddles our window end */
 			get_ts(tcphdr, &snd->curr_ts);
 			add_from_skb(cp, rcv, snd, (u_char *)data, datalen, this_seq,
@@ -329,9 +316,11 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 				pakiet = tmp;
 			}
 		} else {
+			RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			return;
 		}
 	} else {
+		RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 		struct skbuff *p = rcv->listtail;
 
 		pakiet = (struct skbuff *)malloc(sizeof(struct skbuff));
@@ -535,7 +524,7 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
  */
 static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
 		struct app_conn_tbl *tbl, const struct app_conn_key *key, 
-		uint64_t tms, uint32_t *from_client, struct tcphdr *tcphdr)
+		uint64_t tms, int *from_client, struct tcphdr *tcphdr)
 {
 	struct app_conn *cp, *free, *stale, *lru;
 	uint64_t max_cycles;
@@ -576,7 +565,6 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 
 		/* found a free entry to reuse. */
 		if (free != NULL ){
-#if 1
 			/* add conn when syn and dst_addr in ip_list */
 			if ((tcphdr->th_flags & TH_SYN) && 
 					!(tcphdr->th_flags & TH_ACK) &&
@@ -586,17 +574,7 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 				cp = free;
 				*from_client = 1;
 			}
-#else
-			tcp_conn_add(tbl,  free, key, tms, pp, tcphdr);
-			cp = free;
-#endif
 		}
-
-		/*
-		 * we found the flow, but it is already timed out,
-		 * so free associated resources, reposition it in the LRU list,
-		 * and reuse it.
-		 */
 	}
 #if 0
 	else if (max_cycles + cp->last < tms) {
@@ -610,79 +588,104 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 	return (cp);
 }
 
-/*
- * Process new mbuf with connection of IPV4 packet.
- * Incoming mbuf should have it's l2_len/l3_len fields setuped correclty.
- * @param tbl
- *   Table where to lookup/add the fragmented packet.
- * @param mb
- *   Incoming mbuf with IPV4 fragment.
- * @param tms
- *   arrival timestamp.
- * @param ip_hdr
- *   Pointer to the IPV4 header
- * @return
- *   Pointer to stream, or NULL if:
- *   - an error occured.
- */
-static struct app_conn * tcp_conn_get(struct app_protocol *pp, struct app_conn_tbl *tbl,
-		struct rte_mbuf *mb, uint64_t tms, struct ipv4_hdr *ip_hdr, 
-		size_t ip_hdr_offset, uint32_t *from_client)
+static void
+dump_tcp(FILE *f, const struct rte_mbuf *m, unsigned dump_len, 
+		struct ipv4_hdr *ip_hdr, struct tcphdr *tcphdr)
 {
-	//struct app_conn *cp;
-	struct app_conn_key key;
-	//const uint64_t *psd;
-	//uint16_t ip_len;
-	struct tcphdr *tcphdr = NULL;
+	unsigned int len;
+	unsigned nb_segs;
 	int32_t datalen, iplen;
+	int ip_hdr_offset;
 
-
-	iplen = rte_be_to_cpu_32(ip_hdr->total_length);
-
-	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct tcphdr)){
-		return NULL;
-	}
-
-	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
-
-	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
-	if(datalen < 0){
-		return NULL;
-	}
-
-	/* use first 8 bytes only */
-	key.src_dst_addr = *((uint64_t *)&ip_hdr->src_addr);
-	key.src_dst_port = *((uint32_t *)tcphdr);
-	if(key.src_dst_addr == 0 ){
-		return NULL;
-	}
-
-	/* try to find/add entry into the connection table. */
-	return tcp_conn_find(pp, mb, tbl, &key, tms, 
-			from_client, tcphdr);
-}
-
-static void tcp_process_handle(
-		struct app_conn_tbl *tbl,
-		struct app_conn *cp, __attribute__((unused))struct rte_mbuf *mb, 
-		uint64_t tms, struct ipv4_hdr *ip_hdr, 
-		__attribute__((unused))size_t ip_hdr_offset, uint32_t from_client){
-	struct app_conn_stream *snd, *rcv;
-	struct tcphdr *tcphdr = NULL;
-	int datalen, iplen;
-	uint32_t tmp_ts;
-
+	__rte_mbuf_sanity_check(m, 1);
+/*
+	fprintf(f, "dump mbuf at 0x%p, phys=%"PRIx64", buf_len=%u\n",
+	       m, (uint64_t)m->buf_physaddr, (unsigned)m->buf_len);
+	fprintf(f, "  pkt_len=%"PRIu32", ol_flags=%"PRIx64", nb_segs=%u, "
+	       "in_port=%u\n[", m->pkt_len, m->ol_flags,
+	       (unsigned)m->nb_segs, (unsigned)m->port);
+		   */
 
 	iplen = rte_be_to_cpu_16(ip_hdr->total_length);
-	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
-	
+	ip_hdr_offset = (ip_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
+			IPV4_IHL_MULTIPLIER;
 	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
-	if(datalen < 0){
-		RTE_LOG(DEBUG, USER5, "datalen:%d, iplen:%d, ip_hdr_offset:%d, tcphdr->th_off*4:%d\n",
-				datalen, iplen, (int)ip_hdr_offset, 4*tcphdr->th_off);
+	fprintf(f, "dlen:%d [", datalen);
+	if(tcphdr->th_flags & TH_FIN) fprintf(f, "F");                 
+	if(tcphdr->th_flags & TH_SYN) fprintf(f, "S");
+	if(tcphdr->th_flags & TH_RST) fprintf(f, "R");
+	if(tcphdr->th_flags & TH_ACK) fprintf(f, ".");
+	if(tcphdr->th_flags & TH_PUSH) fprintf(f, "P");
+	if(tcphdr->th_flags & TH_URG) fprintf(f, "U");
+	fprintf(f, "] " NIPQUAD_FMT ":%u->" NIPQUAD_FMT ":%u seq:%x, ack:%x, next_seq:%x\n", 
+			NIPQUAD(ip_hdr->src_addr), rte_be_to_cpu_16(tcphdr->th_sport),
+			NIPQUAD(ip_hdr->dst_addr), rte_be_to_cpu_16(tcphdr->th_dport),
+			rte_be_to_cpu_32(tcphdr->th_seq), rte_be_to_cpu_32(tcphdr->th_ack), 
+			rte_be_to_cpu_32(tcphdr->th_seq) + (datalen > 0 ? datalen : 1));
+
+	nb_segs = m->nb_segs;
+	while (m && nb_segs != 0) {
+		__rte_mbuf_sanity_check(m, 0);
+
+		fprintf(f, "  segment at 0x%p, data=0x%p, data_len=%u\n",
+			m, rte_pktmbuf_mtod(m, void *), (unsigned)m->data_len);
+		len = dump_len;
+		if (len > m->data_len)
+			len = m->data_len;
+		if (len != 0)
+			rte_hexdump(f, NULL, rte_pktmbuf_mtod(m, void *), len);
+		dump_len -= len;
+		m = m->next;
+		nb_segs --;
+	}
+}
+
+
+static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tbl,
+		struct rte_mbuf *mb, uint64_t tms, struct ipv4_hdr *ip_hdr){
+	struct app_conn_stream *snd, *rcv;
+	uint32_t tmp_ts;
+	size_t ip_hdr_offset;
+	int32_t datalen, iplen;
+	struct app_conn_key key;
+	struct app_conn *cp;
+	int from_client;
+	struct tcphdr *tcphdr;
+
+	iplen = rte_be_to_cpu_16(ip_hdr->total_length);
+	ip_hdr_offset = (ip_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
+			IPV4_IHL_MULTIPLIER;
+	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
+
+	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct tcphdr)){
+		//RTE_LOG(WARNING, USER3, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct tcphdr)(%d)\n",
+		//		iplen, (int)ip_hdr_offset, (int)sizeof(struct tcphdr));
 		return;
 	}
 
+
+	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
+	if(datalen < 0){
+		RTE_LOG(WARNING, USER3, "datalen < 0(%d)\n", datalen);
+		return;
+	}
+
+	// todo : my_tcp_check()
+
+	key.src_dst_addr = *((uint64_t *)&ip_hdr->src_addr);
+	key.src_dst_port = *((uint32_t *)tcphdr);
+	if(key.src_dst_addr == 0 ){
+		return;
+	}
+
+	/* try to find/add entry into the connection table. */
+	if((cp = tcp_conn_find(pp, mb, tbl, &key, tms, 
+			&from_client, tcphdr)) == NULL){
+		APP_CONN_TBL_STAT_UPDATE(&tbl->stat, conn_miss, 1);
+		return;
+	}
+
+	// todo: fixit
 	if(mb->next){
 		rte_pktmbuf_dump(stdout, mb, 256);
 	}
@@ -697,13 +700,18 @@ static void tcp_process_handle(
 
 	if((tcphdr->th_flags & TH_SYN)){
 		if(from_client){
+			//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			return;
 		}
 		if(cp->client.state != TCP_SYN_SENT || 
-				cp->server.state != TCP_CLOSE || !(tcphdr->th_flags & TH_ACK))
+				cp->server.state != TCP_CLOSE || !(tcphdr->th_flags & TH_ACK)){
+			//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			return;
-		if(cp->client.seq != rte_be_to_cpu_32(tcphdr->th_ack))
+		}
+		if(cp->client.seq != rte_be_to_cpu_32(tcphdr->th_ack)){
+			//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			return;
+		}
 		cp->last = tms;
 		cp->server.state = TCP_SYN_RECV;
 		cp->server.seq = rte_be_to_cpu_32(tcphdr->th_seq) + 1;
@@ -730,13 +738,22 @@ static void tcp_process_handle(
 		}
 		goto out;
 	}
-	if (!(!datalen && rte_be_to_cpu_32(tcphdr->th_seq) == rcv->ack_seq) &&
-			(!before(rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq + rcv->window*rcv->wscale) ||
-			  before(rte_be_to_cpu_32(tcphdr->th_seq) + datalen, rcv->ack_seq))){
+	if (!(!datalen && rte_be_to_cpu_32(tcphdr->th_seq) == rcv->ack_seq) 
+		&& (!before(rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq + rcv->window*rcv->wscale) 
+			|| before(rte_be_to_cpu_32(tcphdr->th_seq) + datalen, rcv->ack_seq)))
+	{
 		/*
-		RTE_LOG(DEBUG, USER5, "datalen:%d th_seq:%u ack_seq:%u, rcv->window:%u, rcv->wsale:%u\n",
-				datalen, rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq, rcv->window, rcv->wscale);
-				*/
+		RTE_LOG(DEBUG, USER3, "%s:%d datalen:%d seq:%u ack:%u window:%u wscale:%u\n", 
+				__func__, __LINE__, datalen, rte_be_to_cpu_32(tcphdr->th_seq), rcv->ack_seq, 
+				rcv->window, rcv->wscale);
+		*/
+		//dump_tcp(stdout, mb, 0, ip_hdr, tcphdr);
+		// todo: remove me
+		if(datalen > 65535){
+			dump_tcp(stdout, mb, 1024, ip_hdr, tcphdr);
+			rte_pktmbuf_dump(stdout, mb, 1024);
+			rte_panic();
+		}
 		return;
 	}
 
@@ -747,13 +764,16 @@ static void tcp_process_handle(
 		/* report */
 		cp->pp->report_handle(tbl, cp, tms);
 		app_conn_tbl_del(tbl, cp);
+		//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
 		return;
 	}
 
 	/* PAWS check */
 	if (rcv->ts_on && get_ts(tcphdr, &tmp_ts) && 
-			before(tmp_ts, snd->curr_ts))
+			before(tmp_ts, snd->curr_ts)){
+		//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
 		return; 
+	}
 
 	if ((tcphdr->th_flags & TH_ACK)) {
 		if (from_client && cp->client.state == TCP_SYN_SENT &&
@@ -780,8 +800,10 @@ static void tcp_process_handle(
 			//struct lurker_node *i;
 
 			cp->state = CONN_S_CLOSE;
+			lurkers(cp, 0);
 			cp->pp->report_handle(tbl, cp, tms);
 			app_conn_tbl_del(tbl, cp);
+			//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
 			return;
 		}
 	}
@@ -825,7 +847,7 @@ struct app_protocol app_protocol_tcp = {
 	.protocol = IPPROTO_TCP,
 	//.init = app_tcp_init,
 	.init = NULL,
-	.conn_get = tcp_conn_get,
+	//.conn_get = tcp_conn_get,
 	.debug_packet = tcpudp_debug_packet,
 	.process_handle = tcp_process_handle,
 	.report_handle = tcpudp_report_handle,

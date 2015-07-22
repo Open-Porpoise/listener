@@ -20,21 +20,16 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 	struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
 	uint16_t proto = eth_hdr->ether_type;
 	size_t vlan_offset = get_vlan_offset(eth_hdr, &proto);
-	size_t ip_hdr_offset;
 
 	//struct udp_hdr *udp_hdr = NULL;
 	//uint32_t hash;
-	uint32_t from_client = 0;
 	struct app_protocol *pp;
-	struct app_conn *cp;
 	if(vlan_offset){
 		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, vlan, 1);
 	}
 
 	if (lp && rte_cpu_to_be_16(ETHER_TYPE_IPv4) == proto) {
 		struct ipv4_hdr *ipv4_hdr = (struct ipv4_hdr *)((char *)(eth_hdr + 1) + vlan_offset);
-		ip_hdr_offset = (ipv4_hdr->version_ihl & IPV4_HDR_IHL_MASK) *
-				IPV4_IHL_MULTIPLIER;
 
 		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, total_pkts, 1);
 		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, total_bytes,
@@ -75,12 +70,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		if (unlikely(!pp))
 			 goto out;
 
-		if((cp = pp->conn_get(pp, lp->conn_tbl, m, tms, ipv4_hdr, ip_hdr_offset, &from_client)) == NULL){
-			APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, conn_miss, 1);
-			goto out;
-		}
-
-		pp->process_handle(lp->conn_tbl, cp, m, tms, ipv4_hdr, ip_hdr_offset, from_client);
+		pp->process_handle(pp, lp->conn_tbl, m, tms, ipv4_hdr);
 	/*
 	}else if  (rte_cpu_to_be_16(ETHER_TYPE_IPv6) == proto) {
 		goto out;

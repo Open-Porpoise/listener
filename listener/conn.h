@@ -279,17 +279,18 @@ struct app_protocol {
 
 	void (*init) (struct app_protocol * pp);
 
+	/*
     struct app_conn *                    
         (*conn_get) (struct app_protocol *pp,
 			struct app_conn_tbl *tbl,
 			struct rte_mbuf *mb, 
 			uint64_t tms, struct ipv4_hdr *ip_hdr, 
 			size_t ip_hdr_offset, uint32_t *from_client);
+			*/
 
-	void (*process_handle)(struct app_conn_tbl *tbl,
-			struct app_conn *cp, struct rte_mbuf *mb, 
-			uint64_t tms, struct ipv4_hdr *ip_hdr, 
-			size_t ip_hdr_offset, uint32_t from_client);
+	void (*process_handle)(struct app_protocol *pp,
+			struct app_conn_tbl *tbl, struct rte_mbuf *mb,
+			uint64_t tms, struct ipv4_hdr *ip_hdr);
 
 	void (*debug_packet)(struct app_protocol *pp,
 			const struct rte_mbuf *mbuf, void *ip_hdr, 
@@ -329,5 +330,5 @@ void app_conn_tbl_del(struct app_conn_tbl *tbl,
 		struct app_conn *cp);
 struct app_conn * conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 		const struct app_conn_key *key, uint64_t tms,
-		struct app_conn **free, struct app_conn **stale, uint32_t *from_client);
+		struct app_conn **free, struct app_conn **stale, int *from_client);
 #endif

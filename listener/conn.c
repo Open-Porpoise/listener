@@ -119,7 +119,7 @@ static void conn_hash(__attribute__((unused))const struct app_conn_key *key,
 
 struct app_conn * conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 		const struct app_conn_key *key, uint64_t tms,
-		struct app_conn **free, struct app_conn **stale, uint32_t *from_client)
+		struct app_conn **free, struct app_conn **stale, int *from_client)
 {
 	struct app_conn *p1, *p2;
 	struct app_conn *empty, *old;
