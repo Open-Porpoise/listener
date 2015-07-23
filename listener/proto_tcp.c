@@ -148,7 +148,7 @@ static void event(struct app_conn *cp, char mask,
 		//LOG_ADDR(->);
 		//RTE_LOG(DEBUG, USER2, "state: CONN_S_JUST_EST\n");
 		//cp->conn_time = tms;
-		cp->ttc = ms_diff(cp->start, tms);
+		cp->conn_time = ms_diff(cp->start, tms);
 		return;
 	}
 	if (cp->state == CONN_S_CLOSE){
@@ -189,10 +189,18 @@ static void event(struct app_conn *cp, char mask,
 				if(rte_be_to_cpu_16(cp->client.key.port[1]) == 80){
 					// request
 					if (cp->client.offset == 0 && cp->client.count_new > 0){
+						uint32_t *resp;
 						//RTE_LOG(DEBUG, USER5, "cc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
 						//	cp->client.offset, cp->server.offset,
 						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->client.data);
-						cp->thr = ms_diff(cp->start, tms) - cp->thc;
+						cp->rsp_time = ms_diff(cp->start, tms) - cp->req_time;
+						resp = (uint32_t *)cp->client.data;
+						if(resp[0] == *(uint32_t *)"HTTP" && 
+								(resp[1] == *(uint32_t *)"/0.9" || 
+								resp[1] == *(uint32_t *)"/1.0" || 
+								resp[1] == *(uint32_t *)"/1.1")){
+							cp->http_stat_code = atoi((char *)&resp[2]);
+						}
 					}
 				}
 				break;
@@ -210,7 +218,7 @@ static void event(struct app_conn *cp, char mask,
 						//RTE_LOG(DEBUG, USER5, "sc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
 						//	cp->client.offset, cp->server.offset,
 						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->server.data);
-						cp->thc = ms_diff(cp->start, tms) - cp->ttc;
+						cp->req_time = ms_diff(cp->start, tms) - cp->conn_time;
 					}
 				}
 				break;

@@ -62,9 +62,10 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	mbuf.u.rx_bytes = cp->client.bytes;
 	mbuf.u.tx_pkgs = cp->server.pkts;
 	mbuf.u.tx_bytes = cp->server.bytes;
-	mbuf.u.ttc = cp->ttc;
-	mbuf.u.thc = cp->thc;
-	mbuf.u.thr = cp->thr;
+	mbuf.u.conn_time = cp->conn_time;
+	mbuf.u.req_time = cp->req_time;
+	mbuf.u.rsp_time = cp->rsp_time;
+	mbuf.u.http_stat_code = cp->http_stat_code;
 	
 
 	if (msgsnd(app.msgid, &mbuf, sizeof(uaq_t), IPC_NOWAIT)){
@@ -83,7 +84,7 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 				cp->client.bytes, cp->client.pkts,
 				cp->server.bytes, cp->server.pkts, 
 				cp->last, tms, ((tms - cp->last) * 1000)/rte_get_tsc_hz(),
-				mbuf.u.ttc, mbuf.u.thc, mbuf.u.thr);
+				mbuf.u.conn_time, mbuf.u.req_time, mbuf.u.rsp_time);
 		tbl->nu_log ++;
 	}
 

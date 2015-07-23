@@ -127,9 +127,10 @@ struct app_conn {
 	uint8_t state;
 	uint64_t start;       /**< creation timestamp/ syn mbuf timestamp */
 	uint64_t last;       /**< snd/rcv mbuf timestamp */
-	uint32_t ttc;       /**< establish timestamp */
-	uint32_t thc;       /**< request timestamp for http */
-	uint32_t thr;       /**< response timestamp for http */
+	uint32_t conn_time;  //ttc;       /**< establish timestamp */
+	uint32_t req_time;   //thc;       /**< request timestamp for http */
+	uint32_t rsp_time;   //thr;       /**< response timestamp for http */
+	uint16_t http_stat_code;  /* 20x, 4xx, ... */
 
 	struct app_conn_stream client; /* 0:client 1:server */
 	struct app_conn_stream server; /* 0:client 1:server */

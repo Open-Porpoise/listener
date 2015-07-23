@@ -46,6 +46,7 @@ int main (int argc, char **argv) {
 		"\"ttc\":\"%u\","
 		"\"thc\":\"%u\","
 		"\"thr\":\"%u\","
+		"\"code\":\"%u\","
 		"\"time\":%u"
 		"}";
 	size_t msgsize;
@@ -135,9 +136,10 @@ int main (int argc, char **argv) {
 				(char *)e->country,
 				(char *)e->isp,
 				(char *)e->province,
-				mbuf.u.ttc,
-				mbuf.u.thc,
-				mbuf.u.thr,
+				mbuf.u.conn_time,
+				mbuf.u.req_time,
+				mbuf.u.rsp_time,
+				mbuf.u.http_stat_code,
 				time(NULL));
 
 		if((msg_cnt & 0xf) == 0xf){
