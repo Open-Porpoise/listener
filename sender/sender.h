@@ -29,6 +29,9 @@ typedef struct {
 	uint32_t tx_pkgs;
 	uint64_t rx_bytes;
 	uint64_t tx_bytes;
+	uint32_t ttc;
+	uint32_t thc;
+	uint32_t thr;
 }uaq_t;
 
 typedef struct {

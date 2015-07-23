@@ -118,8 +118,6 @@ struct app_conn_stream {
   int rmem_alloc;
   struct skbuff *list;
   struct skbuff *listtail;
-
-
 };
 
 struct app_conn {
@@ -127,8 +125,11 @@ struct app_conn {
 	TAILQ_ENTRY(app_conn) rpt;   /**< report list */
 	struct app_protocol *pp;
 	uint8_t state;
-	uint64_t start;       /**< creation timestamp */
+	uint64_t start;       /**< creation timestamp/ syn mbuf timestamp */
 	uint64_t last;       /**< snd/rcv mbuf timestamp */
+	uint32_t ttc;       /**< establish timestamp */
+	uint32_t thc;       /**< request timestamp for http */
+	uint32_t thr;       /**< response timestamp for http */
 
 	struct app_conn_stream client; /* 0:client 1:server */
 	struct app_conn_stream server; /* 0:client 1:server */

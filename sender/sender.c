@@ -43,6 +43,9 @@ int main (int argc, char **argv) {
 		"\"src_country\":\"%s\","
 		"\"src_isp\":\"%s\","
 		"\"src_province\":\"%s\","
+		"\"ttc\":\"%u\","
+		"\"thc\":\"%u\","
+		"\"thr\":\"%u\","
 		"\"time\":%u"
 		"}";
 	size_t msgsize;
@@ -132,6 +135,9 @@ int main (int argc, char **argv) {
 				(char *)e->country,
 				(char *)e->isp,
 				(char *)e->province,
+				mbuf.u.ttc,
+				mbuf.u.thc,
+				mbuf.u.thr,
 				time(NULL));
 
 		if((msg_cnt & 0xf) == 0xf){

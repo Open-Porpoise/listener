@@ -121,8 +121,16 @@ static void add2buf(struct app_conn_stream * rcv, char *data, int datalen)
 }
 
 
+static uint32_t ms_diff(uint64_t a, uint64_t b){
+	if(b > a){
+		return ((b - a) * 1000)/rte_get_tsc_hz();
+	}else{
+		return 0;
+	}
+}
 
-static void lurkers(struct app_conn *cp, char mask){
+static void event(struct app_conn *cp, char mask, 
+		struct app_conn_tbl *tbl, uint64_t tms){
 #define LOG_ADDR(a) do{ \
 	RTE_LOG(DEBUG, USER3, \
 			"TCP "NIPQUAD_FMT":%u"#a NIPQUAD_FMT":%u ", \
@@ -133,47 +141,78 @@ static void lurkers(struct app_conn *cp, char mask){
 			); \
 }while(0)
 
-	LOG_ADDR(->);
-	RTE_LOG(DEBUG, USER2, "state:%d\n", cp->state);
+	//LOG_ADDR(->);
+	//RTE_LOG(DEBUG, USER2, "state:%d\n", cp->state);
 
 	if (cp->state == CONN_S_JUST_EST){
+		//LOG_ADDR(->);
+		//RTE_LOG(DEBUG, USER2, "state: CONN_S_JUST_EST\n");
+		//cp->conn_time = tms;
+		cp->ttc = ms_diff(cp->start, tms);
 		return;
 	}
 	if (cp->state == CONN_S_CLOSE){
+		//LOG_ADDR(->);
+		//RTE_LOG(DEBUG, USER2, "state: CONN_S_CLOSE\n");
+		cp->pp->report_handle(tbl, cp, tms);
 		return;
 	}
 	if (cp->state == CONN_S_TIMED_OUT){
 		// todo: remove report_handle from app_conn_table->rpt timeout
+		//LOG_ADDR(->);
+		//RTE_LOG(DEBUG, USER2, "state: CONN_S_TIMED_OUT\n");
+		cp->pp->report_handle(tbl, cp, tms);
 		return;
 	}
 	if (cp->state == CONN_S_RESET){
+		//LOG_ADDR(->);
+		//RTE_LOG(DEBUG, USER2, "state: CONN_S_RESET\n");
+		cp->pp->report_handle(tbl, cp, tms);
 		return;
 	}
 	if (cp->state == CONN_S_DATA){
 		switch (mask) {
 			case COLLECT_ccu:
-				LOG_ADDR(->);
-				RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->client.urgdata);
+				//LOG_ADDR(->);
+				//RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->client.urgdata);
 				break;
 			case COLLECT_scu:
-				LOG_ADDR(<-);
-				RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->server.urgdata);
+				//LOG_ADDR(<-);
+				//RTE_LOG(DEBUG, USER2, "urgdata:%c\n", cp->server.urgdata);
 				break;
 			case COLLECT_cc:
-				LOG_ADDR(->);
+				//LOG_ADDR(<-);
 				//RTE_LOG(DEBUG, USER2, "client data:%.*s\n", 
 						//cp->client.count_new, cp->client.data);
-				RTE_LOG(DEBUG, USER2, "client datalen:%d\n", 
-						cp->client.count_new);
+				//RTE_LOG(DEBUG, USER2, "client datalen:%d\n", 
+				//		cp->client.count_new);
+				if(rte_be_to_cpu_16(cp->client.key.port[1]) == 80){
+					// request
+					if (cp->client.offset == 0 && cp->client.count_new > 0){
+						//RTE_LOG(DEBUG, USER5, "cc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
+						//	cp->client.offset, cp->server.offset,
+						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->client.data);
+						cp->thr = ms_diff(cp->start, tms) - cp->thc;
+					}
+				}
 				break;
 			case COLLECT_sc:
-				LOG_ADDR(<-);
+				//LOG_ADDR(->);
 				/*
 				RTE_LOG(DEBUG, USER2, "data:%.*s\n", 
 						cp->server.count_new, cp->server.data);
-						*/
-				RTE_LOG(DEBUG, USER2, "server datalen:%d\n", 
-						cp->server.count_new);
+				*/
+				//RTE_LOG(DEBUG, USER2, "server datalen:%d\n", 
+				//		cp->server.count_new);
+				if(rte_be_to_cpu_16(cp->client.key.port[1]) == 80){
+					// response
+					if (cp->server.offset == 0 && cp->server.count_new > 0){
+						//RTE_LOG(DEBUG, USER5, "sc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
+						//	cp->client.offset, cp->server.offset,
+						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->server.data);
+						cp->thc = ms_diff(cp->start, tms) - cp->ttc;
+					}
+				}
 				break;
 			default:
 				break;
@@ -181,12 +220,12 @@ static void lurkers(struct app_conn *cp, char mask){
 	}
 }
 
-static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
+static void notify(struct app_conn * cp, struct app_conn_stream * rcv,
+		struct app_conn_tbl *tbl, uint64_t tms)
 {
 	//struct lurker_node *i, **prev_addr;
 	char mask;
 
-	//cp->pp->report_handle(tbl, cp, tms);
 	if (rcv->count_new_urg) {
 		if (!rcv->collect_urg)
 			return;
@@ -194,7 +233,7 @@ static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
 			mask = COLLECT_ccu;
 		else
 			mask = COLLECT_scu;
-		lurkers(cp, mask);
+		event(cp, mask, tbl, tms);
 		//goto prune_listeners;
 		return;
 	}
@@ -207,8 +246,7 @@ static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
 		cp->read = rcv->count - rcv->offset;
 		total = cp->read;
 
-		//ride_lurkers(cp, mask);
-		lurkers(cp, mask);
+		event(cp, mask, tbl, tms);
 		if (cp->read > total - rcv->count_new)
 			rcv->count_new = total - cp->read;
 
@@ -224,7 +262,8 @@ static void notify(struct app_conn * cp, struct app_conn_stream * rcv)
 static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 		struct app_conn_stream * snd,
 		u_char *data, int datalen,
-		uint32_t this_seq, char fin, char urg, uint32_t urg_ptr)
+		uint32_t this_seq, char fin, char urg, uint32_t urg_ptr, 
+		struct app_conn_tbl *tbl, uint64_t tms)
 {
 	uint32_t lost = EXP_SEQ - this_seq;
 	int to_copy, to_copy2;
@@ -239,23 +278,23 @@ static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 		to_copy = rcv->urg_ptr - (this_seq + lost);
 		if (to_copy > 0) {
 			add2buf(rcv, (char *)(data + lost), to_copy);
-			notify(cp, rcv);
+			notify(cp, rcv, tbl, tms);
 		}
 		rcv->urgdata = data[rcv->urg_ptr - this_seq];
 		rcv->count_new_urg = 1;
-		notify(cp, rcv);
+		notify(cp, rcv, tbl, tms);
 		rcv->count_new_urg = 0;
 		rcv->urg_seen = 0;
 		rcv->urg_count++;
 		to_copy2 = this_seq + datalen - rcv->urg_ptr - 1;
 		if (to_copy2 > 0) {
 			add2buf(rcv, (char *)(data + lost + to_copy + 1), to_copy2);
-			notify(cp, rcv);
+			notify(cp, rcv, tbl, tms);
 		}
 	} else {
 		if (datalen - lost > 0) {
 			add2buf(rcv, (char *)(data + lost), datalen - lost);
-			notify(cp, rcv);
+			notify(cp, rcv, tbl, tms);
 		}
 	}
 	if (fin) {
@@ -267,8 +306,8 @@ static void add_from_skb(struct app_conn * cp, struct app_conn_stream * rcv,
 
 static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 		struct app_conn_stream * snd, struct app_conn_stream * rcv,
-		char *data, int datalen, int skblen
-		)
+		char *data, int datalen, int skblen, struct app_conn_tbl *tbl,
+		uint64_t tms)
 {
 	uint32_t this_seq = rte_be_to_cpu_32(tcphdr->th_seq);
 	struct skbuff *pakiet, *tmp;
@@ -281,13 +320,14 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 
 	if (!after(this_seq, EXP_SEQ)) {
 		if (after(this_seq + datalen + (tcphdr->th_flags & TH_FIN), EXP_SEQ)) {
-			RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
+			//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			/* the packet straddles our window end */
 			get_ts(tcphdr, &snd->curr_ts);
 			add_from_skb(cp, rcv, snd, (u_char *)data, datalen, this_seq,
 					(tcphdr->th_flags & TH_FIN),
 					(tcphdr->th_flags & TH_URG),
-					rte_be_to_cpu_16(tcphdr->th_urp) + this_seq - 1);
+					rte_be_to_cpu_16(tcphdr->th_urp) + this_seq - 1,
+					tbl, tms);
 			/*
 			 * Do we have any old packets to ack that the above
 			 * made visible? (Go forward from skb)
@@ -299,7 +339,7 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 				if (after(pakiet->seq + pakiet->len + pakiet->fin, EXP_SEQ)) {
 					add_from_skb(cp, rcv, snd, pakiet->data,
 							pakiet->len, pakiet->seq, pakiet->fin, pakiet->urg,
-							pakiet->urg_ptr + pakiet->seq - 1);
+							pakiet->urg_ptr + pakiet->seq - 1, tbl, tms);
 				}
 				rcv->rmem_alloc -= pakiet->truesize;
 				if (pakiet->prev)
@@ -316,11 +356,11 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 				pakiet = tmp;
 			}
 		} else {
-			RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
+			//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 			return;
 		}
 	} else {
-		RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
+		//RTE_LOG(DEBUG, USER3, "%s:%d\n", __func__, __LINE__);
 		struct skbuff *p = rcv->listtail;
 
 		pakiet = (struct skbuff *)malloc(sizeof(struct skbuff));
@@ -522,9 +562,10 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
  * If the entry is stale, then free and reuse it.
  * just fro tcp
  */
-static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
-		struct app_conn_tbl *tbl, const struct app_conn_key *key, 
-		uint64_t tms, int *from_client, struct tcphdr *tcphdr)
+static struct app_conn * tcp_conn_find(struct app_protocol *pp, 
+		struct rte_mbuf *mb, struct app_conn_tbl *tbl, 
+		const struct app_conn_key *key, uint64_t tms, 
+		int *from_client, struct tcphdr *tcphdr)
 {
 	struct app_conn *cp, *free, *stale, *lru;
 	uint64_t max_cycles;
@@ -541,7 +582,8 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 
 		/*timed-out entry, free and invalidate it*/
 		if (stale != NULL) {
-			stale->pp->report_handle(tbl, stale, tms);
+			stale->state = CONN_S_TIMED_OUT;
+			event(stale, 0, tbl, tms);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
 
@@ -553,9 +595,10 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 		} else if (free != NULL &&
 				tbl->max_entries <= tbl->use_entries) {
 			lru = TAILQ_FIRST(&tbl->lru);
-			if (max_cycles + lru->last < tms) {
+			if (lru && max_cycles + lru->last < tms) {
 				//ip_frag_tbl_del(tbl, lru);
-				pp->report_handle(tbl, lru, tms);
+				lru->state = CONN_S_TIMED_OUT;
+				event(lru, 0, tbl, tms);
 				app_conn_tbl_del(tbl, lru);
 			} else {
 				free = NULL;
@@ -762,7 +805,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			cp->state = CONN_S_RESET;
 		}
 		/* report */
-		cp->pp->report_handle(tbl, cp, tms);
+		event(cp, 0, tbl, tms);
 		app_conn_tbl_del(tbl, cp);
 		//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
 		return;
@@ -786,7 +829,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 
 				cp->server.state = TCP_ESTABLISHED;
 				cp->state = CONN_S_JUST_EST;
-				lurkers(cp, 0);
+				event(cp, 0, tbl, tms);
 				cp->state = CONN_S_DATA;
 			}
 			// return;
@@ -800,8 +843,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			//struct lurker_node *i;
 
 			cp->state = CONN_S_CLOSE;
-			lurkers(cp, 0);
-			cp->pp->report_handle(tbl, cp, tms);
+			event(cp, 0, tbl, tms);
 			app_conn_tbl_del(tbl, cp);
 			//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
 			return;
@@ -810,7 +852,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 	if (datalen + (tcphdr->th_flags & TH_FIN) > 0){
 		tcp_queue(cp, tcphdr, snd, rcv,
 				(char *) (tcphdr) + 4 * tcphdr->th_off,
-				datalen, mb->buf_len);
+				datalen, mb->buf_len, tbl, tms);
 	}
 	snd->window = rte_be_to_cpu_16(tcphdr->th_win);
 	if (rcv->rmem_alloc > 65535)
@@ -820,19 +862,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 	snd->pkts++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
-	/*
-	if (!cp->listeners)
-		nids_free_tcp_stream(cp);
-	*/
 
-	// todo: seq / ack 
-	// todo: cp->state  cp->stream[0/1].state
-
-/*
-	if(cp->state == TCP_CLOSE){
-		cp->pp->report_handle(tbl, cp, tms);
-	}
-*/
 out:
 	// update timer and lru
 	snd->last = tms;

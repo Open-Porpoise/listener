@@ -62,6 +62,9 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	mbuf.u.rx_bytes = cp->client.bytes;
 	mbuf.u.tx_pkgs = cp->server.pkts;
 	mbuf.u.tx_bytes = cp->server.bytes;
+	mbuf.u.ttc = cp->ttc;
+	mbuf.u.thc = cp->thc;
+	mbuf.u.thr = cp->thr;
 	
 
 	if (msgsnd(app.msgid, &mbuf, sizeof(uaq_t), IPC_NOWAIT)){
@@ -69,13 +72,18 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	}
 
 	if (tbl->nu_log < 100){
-		RTE_LOG(DEBUG, USER1, "%s "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u last:%lu tms:%lu time:%lu\n", 
+		RTE_LOG(DEBUG, USER1, "%s "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u"
+				" tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u"
+				" last:%lu tms:%lu time:%lu ttc:%u thc:%u thr:%u\n", 
 				cp->pp->name, 
-				NIPQUAD(cp->client.key.addr[0]), rte_be_to_cpu_16(cp->client.key.port[0]),
-				NIPQUAD(cp->client.key.addr[1]), rte_be_to_cpu_16(cp->client.key.port[1]),
+				NIPQUAD(cp->client.key.addr[0]), 
+				rte_be_to_cpu_16(cp->client.key.port[0]),
+				NIPQUAD(cp->client.key.addr[1]), 
+				rte_be_to_cpu_16(cp->client.key.port[1]),
 				cp->client.bytes, cp->client.pkts,
 				cp->server.bytes, cp->server.pkts, 
-				cp->last, tms, (tms - cp->last)/((rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S));
+				cp->last, tms, ((tms - cp->last) * 1000)/rte_get_tsc_hz(),
+				mbuf.u.ttc, mbuf.u.thc, mbuf.u.thr);
 		tbl->nu_log ++;
 	}
 
