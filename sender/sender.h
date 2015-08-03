@@ -29,10 +29,11 @@ typedef struct {
 	uint32_t tx_pkgs;
 	uint64_t rx_bytes;
 	uint64_t tx_bytes;
-	uint32_t conn_time;
-	uint32_t req_time;
-	uint32_t rsp_time;
-	uint16_t http_stat_code;
+	int32_t conn_time;
+	int32_t req_time;
+	int32_t rsp_time;
+	int32_t round_trip_time;
+	int16_t http_stat_code;
 }uaq_t;
 
 typedef struct {

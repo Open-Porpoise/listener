@@ -66,13 +66,16 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	mbuf.u.req_time = cp->req_time;
 	mbuf.u.rsp_time = cp->rsp_time;
 	mbuf.u.http_stat_code = cp->http_stat_code;
+	mbuf.u.round_trip_time = cp->round_trip_time_count ? 
+		cp->round_trip_time_sum / cp->round_trip_time_count : -1;
 	
 
 	if (msgsnd(app.msgid, &mbuf, sizeof(uaq_t), IPC_NOWAIT)){
 		APP_CONN_TBL_STAT_UPDATE(&tbl->stat, msg_fail, 1);
 	}
 
-	if (tbl->nu_log < 100){
+	/*
+	if (tbl->nu_log < 5){
 		RTE_LOG(DEBUG, USER1, "%s "NIPQUAD_FMT":%u->"NIPQUAD_FMT":%u"
 				" tx_bytes:%lu tx_pkts:%u rx_bytes:%lu rx_pkts:%u"
 				" last:%lu tms:%lu time:%lu ttc:%u thc:%u thr:%u\n", 
@@ -87,12 +90,19 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 				mbuf.u.conn_time, mbuf.u.req_time, mbuf.u.rsp_time);
 		tbl->nu_log ++;
 	}
+	*/
 
 	cp->client.bytes = 0;
 	cp->server.bytes = 0;
 	cp->client.pkts = 0;
 	cp->server.pkts = 0;
 	cp->start = tms;
+	cp->http_stat_code = 0;
+	cp->round_trip_time_sum = 0;
+	cp->round_trip_time_count = 0;
+	cp->req_time = -1;
+	cp->rsp_time = -1;
+	cp->conn_time = -1;
 	TAILQ_REMOVE(&tbl->lru, cp, lru);
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
 

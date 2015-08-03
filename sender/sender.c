@@ -43,10 +43,11 @@ int main (int argc, char **argv) {
 		"\"src_country\":\"%s\","
 		"\"src_isp\":\"%s\","
 		"\"src_province\":\"%s\","
-		"\"ttc\":\"%u\","
-		"\"thc\":\"%u\","
-		"\"thr\":\"%u\","
-		"\"code\":\"%u\","
+		"\"ttc\":\"%d\","
+		"\"thc\":\"%d\","
+		"\"thr\":\"%d\","
+		"\"code\":\"%d\","
+		"\"rrt\":\"%d\","
 		"\"time\":%u"
 		"}";
 	size_t msgsize;
@@ -140,6 +141,7 @@ int main (int argc, char **argv) {
 				mbuf.u.req_time,
 				mbuf.u.rsp_time,
 				mbuf.u.http_stat_code,
+				mbuf.u.round_trip_time,
 				time(NULL));
 
 		if((msg_cnt & 0xf) == 0xf){

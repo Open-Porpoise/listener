@@ -104,6 +104,10 @@ struct app_conn_stream {
 	uint32_t wscale;
 	struct app_conn *cp;
 
+	uint64_t seq_tms;
+
+
+
 
 	/* from nids */
   char state;
@@ -127,10 +131,12 @@ struct app_conn {
 	uint8_t state;
 	uint64_t start;       /**< creation timestamp/ syn mbuf timestamp */
 	uint64_t last;       /**< snd/rcv mbuf timestamp */
-	uint32_t conn_time;  //ttc;       /**< establish timestamp */
-	uint32_t req_time;   //thc;       /**< request timestamp for http */
-	uint32_t rsp_time;   //thr;       /**< response timestamp for http */
-	uint16_t http_stat_code;  /* 20x, 4xx, ... */
+	int32_t conn_time;  //ttc;       /**< establish timestamp */
+	int32_t req_time;   //thc;       /**< request timestamp for http */
+	int32_t rsp_time;   //thr;       /**< response timestamp for http */
+	int16_t http_stat_code;  /* 20x, 4xx, ... */
+	int16_t round_trip_time_count;
+	int32_t round_trip_time_sum;
 
 	struct app_conn_stream client; /* 0:client 1:server */
 	struct app_conn_stream server; /* 0:client 1:server */
@@ -178,7 +184,7 @@ struct app_conn_tbl {
 	uint32_t             nb_entries;      /**< total size of the table. */
 	uint32_t             nb_buckets;      /**< num of associativity lines. */
 
-    uint32_t             nu_log;	      /**< num of log lines. */
+    //uint32_t             nu_log;	      /**< num of log lines. */
 	struct conn_pkt *last;         /**< last used entry. */
 	struct app_conn_list lru;           /**< LRU list for table entries. */
 	struct app_conn_list rpt;           /**< report list for table entries. */

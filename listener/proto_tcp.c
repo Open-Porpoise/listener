@@ -536,6 +536,10 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->last = tms;
 	cp->start = tms;
 	cp->pp = pp;
+	cp->conn_time = -1;
+	cp->req_time = -1;
+	cp->rsp_time = -1;
+	cp->http_stat_code = -1;
 	cp->client.key = key[0];
 	cp->server.key.addr[0] = key->addr[1];
 	cp->server.key.addr[1] = key->addr[0];
@@ -551,6 +555,7 @@ static void tcp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->client.last = tms;
 
 	cp->client.seq = rte_be_to_cpu_32(tcphdr->th_seq) + 1;
+	cp->client.seq_tms = tms;
 	cp->client.first_data_seq = cp->client.seq;
 	cp->client.window = rte_be_to_cpu_16(tcphdr->th_win);
 	cp->client.ts_on = get_ts(tcphdr, &cp->client.curr_ts);
@@ -766,6 +771,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 		cp->last = tms;
 		cp->server.state = TCP_SYN_RECV;
 		cp->server.seq = rte_be_to_cpu_32(tcphdr->th_seq) + 1;
+		cp->server.seq_tms = tms;
 		cp->server.first_data_seq = cp->server.seq;
 		cp->server.ack_seq = rte_be_to_cpu_32(tcphdr->th_ack);
 		cp->server.window = rte_be_to_cpu_16(tcphdr->th_win);
@@ -840,10 +846,28 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 				event(cp, 0, tbl, tms);
 				cp->state = CONN_S_DATA;
 			}
-			// return;
 		}
 	}
+
+	// rtt 
+	if(cp->client.state == TCP_ESTABLISHED 
+			&& cp->server.state == TCP_ESTABLISHED){
+		if(from_client){
+			if(after(tcphdr->th_ack, rcv->seq - 1)){
+				if(rcv->seq_tms){
+					cp->round_trip_time_sum += ms_diff(rcv->seq_tms, tms);
+					cp->round_trip_time_count++;
+					rcv->seq_tms = 0;
+				}
+			}
+		}else{
+			snd->seq = tcphdr->th_seq;
+			snd->seq_tms = tms;
+		}
+	}
+
 	if ((tcphdr->th_flags & TH_ACK)) {
+
 		handle_ack(snd, rte_be_to_cpu_32(tcphdr->th_ack));
 		if (rcv->state == FIN_SENT)
 			rcv->state = FIN_CONFIRMED;
@@ -857,11 +881,14 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			return;
 		}
 	}
+
 	if (datalen + (tcphdr->th_flags & TH_FIN) > 0){
 		tcp_queue(cp, tcphdr, snd, rcv,
 				(char *) (tcphdr) + 4 * tcphdr->th_off,
 				datalen, mb->buf_len, tbl, tms);
-	}
+	}/*else if( tcphdr->th_flags & TH_ACK){
+		notify(cp, rcv, tbl, tms);
+	}*/
 	snd->window = rte_be_to_cpu_16(tcphdr->th_win);
 	if (rcv->rmem_alloc > 65535)
 		prune_queue(rcv);
