@@ -144,9 +144,9 @@ int main (int argc, char **argv) {
 				mbuf.u.round_trip_time,
 				time(NULL));
 
-		if((msg_cnt & 0xf) == 0xf){
-			printf("msg_cnt: %lu, msg: %s\n", msg_cnt, pbuf);
-		}
+		//if((msg_cnt & 0xf) == 0xf){
+		//	printf("msg_cnt: %lu, msg: %s\n", msg_cnt, pbuf);
+		//}
 
 		while (run && 
 				rd_kafka_produce(rkt, partition, RD_KAFKA_MSG_F_COPY, 

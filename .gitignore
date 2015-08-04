@@ -11,3 +11,4 @@ sender/sender
 *.json
 *.sh
 *.pyc
+*.txt

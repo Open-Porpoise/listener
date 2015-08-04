@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <mcheck.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <sys/types.h>
@@ -51,14 +52,14 @@
 /* conn */
 
 
-
+//#define HAVE_MTRACE
 #define	MAX_CONN_NUM	UINT32_MAX
 #define	MIN_CONN_NUM	1
 
 #ifdef DEBUG
 #define	DEF_CONN_NUM	0x800
 #else
-#define	DEF_CONN_NUM	0x100000
+#define	DEF_CONN_NUM	0x20000
 #endif
 #define	APP_CONN_TBL_BUCKET_ENTRIES	2
 #define	MAX_CONN_TTL	(3600 * MS_PER_S)
@@ -382,6 +383,10 @@ struct app_lcore_params_worker {
 	//struct list_head *app_conn_tab;
 	//uint8_t *app_conn_tab;
 	struct rte_timer app_timer;
+
+#ifdef HAVE_MTRACE
+	struct rte_timer mtrace_timer;
+#endif
 
 	int debug;
 };

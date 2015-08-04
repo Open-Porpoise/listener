@@ -578,27 +578,53 @@ app_timer_cb(__attribute__((unused)) struct rte_timer *tim,
 	//printf("%s() on lcore %u %lx\n", __func__, lcore_id, (uintptr_t)lp_worker);
 }
 
+#ifdef HAVE_MTRACE
+static void
+mtrace_timer_cb(__attribute__((unused)) struct rte_timer *tim,
+	  __attribute__((unused)) void *arg)
+{
+	muntrace();
+	printf("muntrace done \n");
+}
+#endif
+
+
 static void app_init_worker(void){
 	unsigned lcore;
 	uint64_t hz;
 	int ret;
 	int socket;
 	uint64_t ms_per_hz;
+	struct app_lcore_params_worker *lp_worker;
 
 	hz = rte_get_timer_hz();
 	for (lcore = 0; lcore < APP_MAX_LCORES; lcore ++) {
-		struct app_lcore_params_worker *lp_worker = &app.lcore_params[lcore].worker;
-		rte_timer_init(&lp_worker->app_timer);
 
 		if (app.lcore_params[lcore].type != e_APP_LCORE_WORKER) {
 			continue;
 		}
+
+		lp_worker =  &app.lcore_params[lcore].worker;
+		rte_timer_init(&lp_worker->app_timer);
 
 		socket = rte_lcore_to_socket_id(lcore);
 
 		/* timer */
 		ret = rte_timer_reset(&lp_worker->app_timer, hz*60, PERIODICAL, lcore, app_timer_cb, lp_worker);
 		printf("ret_timer_reset lcore:%d ret:%d\n", lcore, ret);
+
+#ifdef HAVE_MTRACE
+		{
+			static int mt = 0;
+			/* mtrace timer */
+			if(mt == 0){
+				setenv("MALLOC_TRACE", "malloc_output.txt", 1);
+				mtrace();
+				ret = rte_timer_reset(&lp_worker->mtrace_timer, hz*60, SINGLE, lcore, mtrace_timer_cb, lp_worker);
+				mt = 1;
+			}
+		}
+#endif
 
 		/* frag table*/
 		ms_per_hz = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S;

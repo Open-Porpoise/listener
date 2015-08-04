@@ -46,7 +46,8 @@ SRCS-y := main.c config.c init.c runtime.c utils.c core.c conn.c \
 			proto.c proto_udp.c proto_tcp.c \
 			$(SRCDIR)/../geolocation/libgeolocation.a
 
-CFLAGS += -O0 -g -DDEBUG -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
+#CFLAGS += -O0 -g -DDEBUG -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
+CFLAGS += -O0 -g -I$(SRCDIR)/../sender -I$(SRCDIR)/../geolocation
 CFLAGS += $(WERROR_FLAGS)
 CFLAGS_config.o := -D_GNU_SOURCE
 

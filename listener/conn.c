@@ -70,6 +70,11 @@ void prune_queue(struct app_conn_stream * rcv)
 {
 	struct skbuff *tmp, *p = rcv->list;
 
+	if(rcv->data){
+		free(rcv->data);
+		rcv->data = NULL;
+		rcv->bufsize = 0;
+	}
 	while (p) {
 		free(p->data);
 		tmp = p->next;

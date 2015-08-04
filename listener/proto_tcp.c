@@ -382,6 +382,7 @@ static void tcp_queue(struct app_conn * cp, struct tcphdr * tcphdr,
 		pakiet->data = malloc(datalen);
 		if (!pakiet->data){
 			RTE_LOG(WARNING, USER1, "no memory tcp_queue\n");
+			free(pakiet);
 			return;
 		}
 		memcpy(pakiet->data, data, datalen);
@@ -644,6 +645,7 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 	return (cp);
 }
 
+#if 0
 static void
 dump_tcp(FILE *f, const struct rte_mbuf *m, unsigned dump_len, 
 		struct ipv4_hdr *ip_hdr, struct tcphdr *tcphdr)
@@ -695,6 +697,7 @@ dump_tcp(FILE *f, const struct rte_mbuf *m, unsigned dump_len,
 		nb_segs --;
 	}
 }
+#endif
 
 
 static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tbl,
@@ -806,11 +809,11 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 		*/
 		//dump_tcp(stdout, mb, 0, ip_hdr, tcphdr);
 		// todo: remove me
-		if(datalen > 65535){
-			dump_tcp(stdout, mb, 1024, ip_hdr, tcphdr);
-			rte_pktmbuf_dump(stdout, mb, 1024);
-			rte_panic();
-		}
+		//if(datalen > 65535){
+		//	dump_tcp(stdout, mb, 1024, ip_hdr, tcphdr);
+		//	rte_pktmbuf_dump(stdout, mb, 1024);
+		//	rte_panic();
+		//}
 		return;
 	}
 
