@@ -547,10 +547,14 @@ static void app_init_protocol(void) {
     protocols[0] = '\0';
     protocols[2] = '\0';
 
-	if(CONFIG_APP_PROTO_TCP)
-		REGISTER_PROTOCOL(&app_protocol_tcp); 
-	if(CONFIG_APP_PROTO_UDP)
-		REGISTER_PROTOCOL(&app_protocol_udp); 
+#if CONFIG_APP_PROTO_TCP
+	REGISTER_PROTOCOL(&app_protocol_tcp); 
+#endif
+
+//#if CONFIG_APP_PROTO_UDP
+#if 0 
+	REGISTER_PROTOCOL(&app_protocol_udp); 
+#endif
 }
 
 #if 0
@@ -626,20 +630,23 @@ static void app_init_worker(void){
 		}
 #endif
 
-		/* frag table*/
 		ms_per_hz = (rte_get_tsc_hz() + MS_PER_S - 1) / MS_PER_S;
+
+#ifdef HAVE_REASSEMBLE
+		/* frag table*/
 		if ((lp_worker->frag_tbl = rte_ip_frag_table_create(DEF_FLOW_NUM,
 				IP_FRAG_TBL_BUCKET_ENTRIES, DEF_FLOW_NUM, ms_per_hz * DEF_FLOW_TTL,
 				socket)) == NULL) {
 			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
 				DEF_FLOW_NUM, lcore);
 		}
+#endif
 
 		/* connction table */
 		if ((lp_worker->conn_tbl = app_conn_table_create(DEF_CONN_NUM,
 				APP_CONN_TBL_BUCKET_ENTRIES, DEF_CONN_NUM, ms_per_hz * DEF_CONN_TTL, 
 				ms_per_hz * DEF_RPT_TTL, socket)) == NULL) {
-			rte_panic("ip_frag_tbl_create(%u) on lcore: %u failed\n",
+			rte_panic("app_conn_table_create(%u) on lcore: %u failed\n",
 				DEF_CONN_NUM, lcore);
 		}
 

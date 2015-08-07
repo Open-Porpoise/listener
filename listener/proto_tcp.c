@@ -600,6 +600,7 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 			event(stale, 0, tbl, tms);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
+			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, reuse_num, 1);
 
 			/*
 			 * we found a free entry, check if we can use it.
@@ -610,7 +611,6 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 				tbl->max_entries <= tbl->use_entries) {
 			lru = TAILQ_FIRST(&tbl->lru);
 			if (lru && max_cycles + lru->last < tms) {
-				//ip_frag_tbl_del(tbl, lru);
 				lru->state = CONN_S_TIMED_OUT;
 				event(lru, 0, tbl, tms);
 				app_conn_tbl_del(tbl, lru);
@@ -626,7 +626,8 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 			if ((tcphdr->th_flags & TH_SYN) && 
 					!(tcphdr->th_flags & TH_ACK) &&
 					!(tcphdr->th_flags & TH_RST) &&
-					radix32tree_find(app.ip_list, rte_be_to_cpu_32(key->addr[1]))) {
+					radix32tree_find(app.ip_list, rte_be_to_cpu_32(key->addr[1])) &&
+					key->src_dst_addr) {
 				tcp_conn_add(tbl,  free, key, tms, pp, tcphdr);
 				cp = free;
 				*from_client = 1;

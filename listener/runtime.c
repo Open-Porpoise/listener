@@ -79,7 +79,7 @@
 #endif
 
 #ifndef APP_LCORE_WORKER_FLUSH
-#define APP_LCORE_WORKER_FLUSH       1000000
+#define APP_LCORE_WORKER_FLUSH       100000000
 #define APP_LCORE_WORKER_FLUSH_RPT   3000
 #endif
 
@@ -89,7 +89,7 @@
 
 #define APP_IO_RX_DROP_ALL_PACKETS   0
 #define APP_WORKER_DROP_ALL_PACKETS  0
-#define APP_IO_TX_DROP_ALL_PACKETS   0
+#define APP_IO_TX_DROP_ALL_PACKETS   1
 
 #ifndef APP_IO_RX_PREFETCH_ENABLE
 #define APP_IO_RX_PREFETCH_ENABLE    1
@@ -134,7 +134,8 @@ app_lcore_io_rx_buffer_to_send (
 	struct app_lcore_params_io *lp,
 	uint32_t worker,
 	struct rte_mbuf *mbuf,
-	uint32_t bsz)
+	uint32_t bsz,
+	__attribute__((unused)) uint32_t n_workers)
 {
 	uint32_t pos;
 	int ret;
@@ -170,10 +171,12 @@ app_lcore_io_rx_buffer_to_send (
 	if (unlikely(lp->rx.rings_iters[worker] == APP_STATS)) {
 		unsigned lcore = rte_lcore_id();
 
-		printf("\tI/O RX %u out (worker %u): enq success rate = %.2f\n",
+		RTE_LOG(DEBUG, USER2, "I/O RX %u out (worker %u): enq success rate = %.2f(%u/%u)\n",
 			lcore,
 			(unsigned)worker,
-			((double) lp->rx.rings_count[worker]) / ((double) lp->rx.rings_iters[worker]));
+			((double) lp->rx.rings_count[worker]) / ((double) lp->rx.rings_iters[worker]),
+			lp->rx.rings_count[worker], 
+			lp->rx.rings_iters[worker]);
 		lp->rx.rings_iters[worker] = 0;
 		lp->rx.rings_count[worker] = 0;
 	}
@@ -263,9 +266,9 @@ app_lcore_io_rx(
 			rte_prefetch0(rte_pktmbuf_mtod(mbuf_1_1, void *));
 
 			app_lcore_io_rx_buffer_to_send(lp, 
-					xmit_l34_hash32(mbuf_0_0) & (n_workers - 1), mbuf_0_0, bsz_wr);
+					xmit_l34_hash32(mbuf_0_0) & (n_workers - 1), mbuf_0_0, bsz_wr, n_workers);
 			app_lcore_io_rx_buffer_to_send(lp, 
-					xmit_l34_hash32(mbuf_0_1) & (n_workers - 1), mbuf_0_1, bsz_wr);
+					xmit_l34_hash32(mbuf_0_1) & (n_workers - 1), mbuf_0_1, bsz_wr, n_workers);
 		}
 
 		/* Handle the last 1, 2 (when n_mbufs is even) or 3 (when n_mbufs is odd) packets  */
@@ -279,7 +282,7 @@ app_lcore_io_rx(
 
 			rte_prefetch0(mbuf_1_0);
 			app_lcore_io_rx_buffer_to_send(lp, 
-					xmit_l34_hash32(mbuf) & (n_workers - 1), mbuf, bsz_wr);
+					xmit_l34_hash32(mbuf) & (n_workers - 1), mbuf, bsz_wr, n_workers);
 		}
 	}
 }
@@ -514,21 +517,35 @@ static inline void app_lcore_worker_report(struct app_lcore_params_worker *lp, u
 	struct app_conn_tbl *tbl = lp->conn_tbl;
 	uint32_t cnt = 0;
 
-	APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, rpt_loop, 1);
 
 	TAILQ_FOREACH_SAFE(cp, &tbl->rpt, rpt, _cp){
-		if(cp->start + lp->conn_tbl->rpt_cycles <= tms && cnt < APP_LCORE_WORKER_FLUSH_RPT){
+		if(cp->start + tbl->rpt_cycles <= tms && cnt < APP_LCORE_WORKER_FLUSH_RPT){
 			cp->pp->report_handle(tbl, cp, tms);
-			if(cp->pp->protocol == IPPROTO_TCP && cp->last + lp->conn_tbl->max_cycles <= tms){
-				app_conn_tbl_del(lp->conn_tbl, cp);
-			}
 			cnt++;
 		}else{
-			lp->conn_tbl->stat.rpt_max = lp->conn_tbl->stat.rpt_max > cnt ? lp->conn_tbl->stat.rpt_max : cnt;
 			return;
 		}
 	}
 }
+
+// clean 
+static inline void app_lcore_worker_clean(struct app_lcore_params_worker *lp, uint64_t tms) {
+	struct app_conn *cp, *_cp;
+	struct app_conn_tbl *tbl = lp->conn_tbl;
+
+	//printf("app_lcore_worker_clean()\n");
+
+	TAILQ_FOREACH_SAFE(cp, &tbl->lru, lru, _cp){
+		if(cp->last + tbl->max_cycles <= tms){
+			cp->pp->report_handle(tbl, cp, tms);
+			app_conn_tbl_del(tbl, cp);
+			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, clean, 1);
+		}else{
+			return;
+		}
+	}
+}
+
 
 static inline void app_lcore_worker_flush(struct app_lcore_params_worker *lp) {
 	uint32_t port;
@@ -583,6 +600,7 @@ static void app_lcore_main_loop_worker(void) {
 
 		if (APP_LCORE_WORKER_FLUSH && (unlikely(i == APP_LCORE_WORKER_FLUSH))) {
 			//app_lcore_worker_flush(lp);
+			app_lcore_worker_clean(lp, cur_tsc);
 			app_lcore_worker_report(lp, cur_tsc);
 			i = 0;
 		}
@@ -590,8 +608,10 @@ static void app_lcore_main_loop_worker(void) {
 		app_lcore_worker(lp, bsz_rd, cur_tsc);
 
 
+#ifdef HAVE_REASSEMBLE
 		rte_ip_frag_free_death_row(&lp->frag_dr, PREFETCH_OFFSET);
 		//rte_conn_free_death_row(&lp->conn_dr, PREFETCH_OFFSET);
+#endif
 
 		i ++;
 	}

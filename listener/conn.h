@@ -159,8 +159,8 @@ struct conn_tbl_stat {
 	uint64_t proc_bytes;
 	uint64_t conn;
 	uint64_t rpt;
+	uint64_t clean;
 	uint64_t rpt_max;
-	uint64_t rpt_loop;
 	uint64_t msg_fail;
 	uint64_t from_client;
 	uint64_t from_server;
@@ -175,14 +175,14 @@ struct conn_tbl_stat {
 
 /** connection table */
 struct app_conn_tbl {
-	uint64_t             max_cycles;      /**< ttl for table entries. */
-	uint64_t             rpt_cycles;      /**< ttl for table entries. */
-	uint32_t             entry_mask;      /**< hash value mask. */
-	uint32_t             max_entries;     /**< max entries allowed. */
-	uint32_t             use_entries;     /**< entries in use. */
-	uint32_t             bucket_entries;  /**< hash assocaitivity. */
-	uint32_t             nb_entries;      /**< total size of the table. */
-	uint32_t             nb_buckets;      /**< num of associativity lines. */
+	uint64_t max_cycles;      /**< ttl for table entries. */
+	uint64_t rpt_cycles;      /**< ttl for table entries. */
+	uint32_t entry_mask;      /**< hash value mask. */
+	int32_t  max_entries;     /**< max entries allowed. */
+	int32_t  use_entries;     /**< entries in use. */
+	uint32_t bucket_entries;  /**< hash assocaitivity. */
+	uint32_t nb_entries;      /**< total size of the table. */
+	uint32_t nb_buckets;      /**< num of associativity lines. */
 
     //uint32_t             nu_log;	      /**< num of log lines. */
 	struct conn_pkt *last;         /**< last used entry. */

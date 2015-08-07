@@ -29,13 +29,15 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 	}
 
 	sz = sizeof (*tbl) + nb_entries * sizeof (tbl->conn[0]);
-	if ((tbl = rte_zmalloc_socket(__func__, sz, RTE_CACHE_LINE_SIZE,
-					socket_id)) == NULL) {
+	//if ((tbl = rte_zmalloc_socket(__func__, sz, RTE_CACHE_LINE_SIZE,
+	//				socket_id)) == NULL) {
+	if ((tbl = malloc(sz)) == NULL) {
 		RTE_LOG(ERR, USER1,
 				"%s: allocation of %zu bytes at socket %d failed do\n",
 				__func__, sz, socket_id);
 		return (NULL);
 	}
+	memset(tbl, 0, sz);
 
 	RTE_LOG(INFO, USER1, "%s: allocated of %zu bytes at socket %d\n",
 			__func__, sz, socket_id);
@@ -43,6 +45,7 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 	tbl->max_cycles = max_cycles;
 	tbl->rpt_cycles = rpt_cycles;
 	tbl->max_entries = max_entries;
+	tbl->use_entries = 0;
 	tbl->nb_entries = (uint32_t)nb_entries;
 	tbl->nb_buckets = bucket_num;
 	tbl->bucket_entries = bucket_entries;
@@ -55,7 +58,7 @@ app_conn_table_create(uint32_t bucket_num, uint32_t bucket_entries,
 
 static  int conn_is_empty(const struct app_conn *cp)
 {
-	if(cp && cp->client.key.src_dst_addr == 0)
+	if(cp->client.key.src_dst_addr == 0)
 		return 1;
 	return 0;
 }
@@ -64,6 +67,7 @@ static  int conn_is_empty(const struct app_conn *cp)
 static void conn_invalidate(struct app_conn *cp)
 {
 	cp->client.key.src_dst_addr = 0;
+	cp->server.key.src_dst_addr = 0;
 }
 
 void prune_queue(struct app_conn_stream * rcv)
@@ -133,6 +137,9 @@ struct app_conn * conn_lookup(struct app_conn_tbl *tbl,struct rte_mbuf *mb,
 
 	empty = NULL;
 	old = NULL;
+
+	if (!key->src_dst_port)
+		return NULL;
 
 	max_cycles = tbl->max_cycles;
 	assoc = tbl->bucket_entries;

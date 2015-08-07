@@ -35,6 +35,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 		APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, total_bytes,
 				rte_be_to_cpu_16(ipv4_hdr->total_length));
 
+#ifdef HAVE_REASSEMBLE
 		 /* if it is a fragmented packet, then try to reassemble. */
 		if (rte_ipv4_frag_pkt_is_fragmented(ipv4_hdr)) {
 			struct rte_mbuf *mo;
@@ -64,6 +65,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 			APP_CONN_TBL_STAT_UPDATE(&lp->conn_tbl->stat, frag, 1);
 		}
 		eth_hdr->ether_type = rte_be_to_cpu_16(ETHER_TYPE_IPv4);
+#endif
 
 
 		pp = app_proto_get(ipv4_hdr->next_proto_id);
@@ -81,7 +83,7 @@ void process_mbuf(struct app_lcore_params_worker *lp,
 
 out:
 	rte_pktmbuf_free(m);
-	m = NULL;
+//	m = NULL;
 }
 
 
@@ -96,12 +98,12 @@ void app_worker_counter_reset(uint32_t lcore_id,
 
 	//memset(lp->app_conn_tab, 0, 
 	//		APP_CONN_TAB_SIZE * sizeof(*lp->app_conn_tab));
-	RTE_LOG(DEBUG, USER1, "max entries:\t%u;\n"
-		"entries in use:\t%u;\n"
+	RTE_LOG(DEBUG, USER1, "max entries:\t%d;\n"
+		"entries in use:\t%d;\n"
 		"finds/inserts:\t%" PRIu64 ";\n"
-		"entries added:\t%" PRIu64 ";\n"
-		"entries deleted by timeout:\t%" PRIu64 ";\n"
-		"entries reused by timeout:\t%" PRIu64 ";\n"
+		"entries add:\t%" PRIu64 ";\n"
+		"entries del:\t%" PRIu64 ";\n"
+		"entries reused:\t%" PRIu64 ";\n"
 		"from_client:\t%" PRIu64 ";\n"
 		"from_server:\t%" PRIu64 ";\n"
 		"total add failures:\t%" PRIu64 ";\n"
@@ -118,7 +120,7 @@ void app_worker_counter_reset(uint32_t lcore_id,
 		fail_total,
 		fail_nospace,
 		fail_total - fail_nospace);
-	RTE_LOG(DEBUG, USER1, "lcore(%2u) pkt:%8lu/%lu, bytes:%lu/%lu|%lf/%lf(Mb/s), miss_conn_pkt:%lu, hash_count:%lu, frag:%lu, vlan:%lu, rpt:%lu/%lu/%lu, msg_fail:%lu, unknow proto:%lu\n", lcore_id, 
+	RTE_LOG(DEBUG, USER1, "lcore(%2u) pkt:%8lu/%lu, bytes:%lu/%lu|%lf/%lf(Mb/s), miss_conn_pkt:%lu, hash_count:%lu, frag:%lu, vlan:%lu, rpt:%lu, clean:%lu, msg_fail:%lu, unknow proto:%lu\n", lcore_id, 
 			stat->proc_pkts, stat->total_pkts,
 			stat->proc_bytes, stat->total_bytes,
 			((double)stat->proc_bytes * 8)/ (60 *  (1<<20)),
@@ -128,8 +130,7 @@ void app_worker_counter_reset(uint32_t lcore_id,
 			stat->frag,
 			stat->vlan,
 			stat->rpt,
-			stat->rpt_max,
-			stat->rpt_loop,
+			stat->clean,
 			stat->msg_fail,
 			stat->unknow);
 
@@ -143,7 +144,6 @@ void app_worker_counter_reset(uint32_t lcore_id,
 	stat->total_pkts = 0;
 	stat->total_bytes = 0;
 	stat->rpt = 0;
-	stat->rpt_max = 0;
-	stat->rpt_loop = 0;
+	stat->clean = 0;
 	stat->msg_fail = 0;
 }

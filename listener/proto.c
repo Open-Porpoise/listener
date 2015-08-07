@@ -103,8 +103,8 @@ void tcpudp_report_handle(struct app_conn_tbl *tbl,
 	cp->req_time = -1;
 	cp->rsp_time = -1;
 	cp->conn_time = -1;
-	TAILQ_REMOVE(&tbl->lru, cp, lru);
-	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
+	TAILQ_REMOVE(&tbl->rpt, cp, rpt);
+	TAILQ_INSERT_TAIL(&tbl->rpt, cp, rpt);
 
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, rpt, 1);
 	return;

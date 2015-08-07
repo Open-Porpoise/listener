@@ -40,7 +40,9 @@
 #include <rte_mempool.h>
 #include <rte_mbuf.h>
 #include <rte_ip.h>
+#ifdef HAVE_REASSEMBLE
 #include <rte_ip_frag.h>
+#endif
 #include <rte_lpm.h>
 
 
@@ -59,7 +61,7 @@
 #ifdef DEBUG
 #define	DEF_CONN_NUM	0x800
 #else
-#define	DEF_CONN_NUM	0x20000
+#define	DEF_CONN_NUM	0x80000
 #endif
 #define	APP_CONN_TBL_BUCKET_ENTRIES	2
 #define	MAX_CONN_TTL	(3600 * MS_PER_S)
@@ -104,7 +106,7 @@
 
 /* Logical cores */
 #ifndef APP_MAX_SOCKETS
-#define APP_MAX_SOCKETS 2
+#define APP_MAX_SOCKETS 16
 #endif
 
 #ifndef APP_MAX_LCORES
@@ -155,7 +157,7 @@
 #endif
 
 #ifndef APP_DEFAULT_MEMPOOL_BUFFERS
-#define APP_DEFAULT_MEMPOOL_BUFFERS   8192 * 4
+#define APP_DEFAULT_MEMPOOL_BUFFERS   8192 * 8
 #endif
 
 #ifndef APP_DEFAULT_MEMPOOL_CACHE_SIZE
@@ -371,9 +373,11 @@ struct app_lcore_params_worker {
 	uint32_t rings_out_count[APP_MAX_NIC_PORTS];
 	uint32_t rings_out_iters[APP_MAX_NIC_PORTS];
 
+#ifdef HAVE_REASSEMBLE
 	/* ip fragment */
 	struct rte_ip_frag_tbl *frag_tbl;
 	struct rte_ip_frag_death_row frag_dr;
+#endif
 
 	/* connction */
 	struct app_conn_tbl *conn_tbl;
