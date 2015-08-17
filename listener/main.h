@@ -95,7 +95,7 @@
 #endif
 
 #ifndef CONFIG_APP_PROTO_UDP
-#define CONFIG_APP_PROTO_UDP 0
+#define CONFIG_APP_PROTO_UDP 1
 #endif
 
 #ifndef APP_CONN_TAB_SIZE

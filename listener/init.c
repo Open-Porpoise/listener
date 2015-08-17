@@ -551,8 +551,7 @@ static void app_init_protocol(void) {
 	REGISTER_PROTOCOL(&app_protocol_tcp); 
 #endif
 
-//#if CONFIG_APP_PROTO_UDP
-#if 0 
+#if CONFIG_APP_PROTO_UDP
 	REGISTER_PROTOCOL(&app_protocol_udp); 
 #endif
 }

@@ -8,22 +8,6 @@
 #include "tcp.h"
 #include <rte_hexdump.h>
 
-#define CONN_S_JUST_EST 1
-#define CONN_S_DATA 2
-#define CONN_S_CLOSE 3
-#define CONN_S_RESET 4
-#define CONN_S_TIMED_OUT 5
-#define CONN_S_EXITING   6	/* conn is exiting; last chance to get data */
-
-
-
-#define FIN_SENT 120
-#define FIN_CONFIRMED 121
-#define COLLECT_cc 1
-#define COLLECT_sc 2
-#define COLLECT_ccu 4
-#define COLLECT_scu 8
-
 #define EXP_SEQ (snd->first_data_seq + rcv->count + rcv->urg_count)
 
 
@@ -634,15 +618,8 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 			}
 		}
 	}
-#if 0
-	else if (max_cycles + cp->last < tms) {
-		//ip_frag_tbl_reuse(tbl, cp, tms);
-		//app_conn_tbl_reuse(tbl, cp, tms);
-	}
-#endif
 
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, fail_total, ((cp == NULL) && (free == NULL)));
-
 	return (cp);
 }
 
@@ -722,7 +699,6 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 		//		iplen, (int)ip_hdr_offset, (int)sizeof(struct tcphdr));
 		return;
 	}
-
 
 	datalen = iplen - ip_hdr_offset - 4 * tcphdr->th_off;
 	if(datalen < 0){
@@ -823,17 +799,15 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			cp->state = CONN_S_RESET;
 		}
 		/* report */
-		event(cp, 0, tbl, tms);
-		app_conn_tbl_del(tbl, cp);
 		//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
-		return;
+		goto out;
 	}
 
 	/* PAWS check */
 	if (rcv->ts_on && get_ts(tcphdr, &tmp_ts) && 
 			before(tmp_ts, snd->curr_ts)){
 		//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
-		return; 
+		goto out; 
 	}
 
 	if ((tcphdr->th_flags & TH_ACK)) {
@@ -879,10 +853,8 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			//struct lurker_node *i;
 
 			cp->state = CONN_S_CLOSE;
-			event(cp, 0, tbl, tms);
-			app_conn_tbl_del(tbl, cp);
 			//RTE_LOG(DEBUG, USER5, "%s:%d\n", __func__, __LINE__);
-			return;
+			goto out;
 		}
 	}
 
@@ -897,17 +869,23 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 	if (rcv->rmem_alloc > 65535)
 		prune_queue(rcv);
 
+
+
+out:
+	// update timer and lru
 	snd->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
 	snd->pkts++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
-
-out:
-	// update timer and lru
 	snd->last = tms;
 	cp->last = tms;
 	TAILQ_REMOVE(&tbl->lru, cp, lru);
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
+
+	if(cp->state == CONN_S_CLOSE || cp->state == CONN_S_RESET){
+		event(cp, 0, tbl, tms);
+		app_conn_tbl_del(tbl, cp);
+	}
 }
 
 /* protocol tcp */

@@ -16,6 +16,21 @@
 #include <rte_byteorder.h>
 #include "main.h"
 
+#define CONN_S_JUST_EST 1
+#define CONN_S_DATA 2
+#define CONN_S_CLOSE 3
+#define CONN_S_RESET 4
+#define CONN_S_TIMED_OUT 5
+#define CONN_S_EXITING   6	/* conn is exiting; last chance to get data */
+
+#define FIN_SENT 120
+#define FIN_CONFIRMED 121
+#define COLLECT_cc 1
+#define COLLECT_sc 2
+#define COLLECT_ccu 4
+#define COLLECT_scu 8
+
+
 /* app_conn flags */
 #define	F_CONN_IN_IDX	0x0001
 #define	F_CONN_OUT_IDX	0x0002

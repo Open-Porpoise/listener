@@ -25,6 +25,7 @@ static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	cp->server.key.proto = key->proto;
 	cp->server.start = tms;
 	cp->server.last = tms;
+	cp->state = CONN_S_DATA;
 
 	cp->client.start = tms;
 	cp->client.last = tms;
@@ -33,6 +34,68 @@ static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 	TAILQ_INSERT_TAIL(&tbl->rpt, cp, rpt);
 	tbl->use_entries++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, add_num, 1);
+	
+}
+
+static void event(struct app_conn *cp, __attribute__((unused))char mask, 
+		struct app_conn_tbl *tbl, uint64_t tms,
+		__attribute__((unused))char *data, __attribute__((unused))int datalen){
+#define LOG_ADDR(a) do{ \
+	RTE_LOG(DEBUG, USER3, \
+			"TCP "NIPQUAD_FMT":%u"#a NIPQUAD_FMT":%u ", \
+			NIPQUAD(cp->client.key.addr[0]), \
+			rte_be_to_cpu_16(cp->client.key.port[0]), \
+			NIPQUAD(cp->client.key.addr[1]),  \
+			rte_be_to_cpu_16(cp->client.key.port[1]) \
+			); \
+}while(0)
+
+	//LOG_ADDR(->);
+	//RTE_LOG(DEBUG, USER2, "state:%d\n", cp->state);
+
+	if (cp->state == CONN_S_TIMED_OUT){
+		// todo: remove report_handle from app_conn_table->rpt timeout
+		//LOG_ADDR(->);
+		//RTE_LOG(DEBUG, USER2, "state: CONN_S_TIMED_OUT\n");
+		cp->pp->report_handle(tbl, cp, tms);
+		return;
+	}
+	if (cp->state == CONN_S_DATA){
+		switch (mask) {
+			case COLLECT_cc:
+				//LOG_ADDR(<-);
+				//RTE_LOG(DEBUG, USER2, "client data:%.*s\n", 
+						//datalen, data);
+				//RTE_LOG(DEBUG, USER2, "client datalen:%d\n", 
+				//		datalen);
+				break;
+			case COLLECT_sc:
+				//LOG_ADDR(->);
+				/*
+				RTE_LOG(DEBUG, USER2, "data:%.*s\n", 
+						datalen, data);
+				*/
+				//RTE_LOG(DEBUG, USER2, "server datalen:%d\n", 
+				//		datalen);
+				break;
+			default:
+				break;
+		}
+	}
+}
+
+static void notify(struct app_conn * cp, struct app_conn_stream * rcv,
+		struct app_conn_tbl *tbl, uint64_t tms, char *data, int datalen)
+{
+	//struct lurker_node *i, **prev_addr;
+	char mask;
+
+	if (rcv == &cp->client)
+		mask = COLLECT_cc;
+	else
+		mask = COLLECT_sc;
+
+	event(cp, mask, tbl, tms, data, datalen);
 }
 
 static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf *mb,
@@ -54,6 +117,12 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 
 		/*timed-out entry, free and invalidate it*/
 		if (stale != NULL) {
+			stale->state = CONN_S_TIMED_OUT;
+			event(stale, 0, tbl, tms, NULL, 0);
+			app_conn_tbl_del(tbl, stale);
+			free = stale;
+			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, reuse_num, 1);
+
 			pp->report_handle(tbl, stale, tms);
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
@@ -66,9 +135,9 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 		} else if (free != NULL &&
 				tbl->max_entries <= tbl->use_entries) {
 			lru = TAILQ_FIRST(&tbl->lru);
-			if (max_cycles + lru->last < tms) {
-				//ip_frag_tbl_del(tbl, lru);
-				pp->report_handle(tbl, lru, tms);
+			if (lru && max_cycles + lru->last < tms) {
+				lru->state = CONN_S_TIMED_OUT;
+				event(lru, 0, tbl, tms, NULL, 0);
 				app_conn_tbl_del(tbl, lru);
 			} else {
 				free = NULL;
@@ -93,28 +162,15 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 				*from_client = 0;
 			}
 		}
-
-		/*
-		 * we found the flow, but it is already timed out,
-		 * so free associated resources, reposition it in the LRU list,
-		 * and reuse it.
-		 */
 	}
-#if 0
-	else if (max_cycles + cp->last < tms) {
-		//ip_frag_tbl_reuse(tbl, cp, tms);
-		//app_conn_tbl_reuse(tbl, cp, tms);
-	}
-#endif
 
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, fail_total, (cp == NULL));
-
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, fail_total, ((cp == NULL) && (free == NULL)));
 	return (cp);
 }
 
 static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl,
 		struct rte_mbuf *mb, uint64_t tms, struct ipv4_hdr *ip_hdr){
-	struct app_conn_stream *sp;
+	struct app_conn_stream *snd, *rcv;
 	struct app_conn *cp;
 	struct app_conn_key key;
 	struct udp_hdr *udp_hdr = NULL;
@@ -129,10 +185,11 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 
 
 	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct udp_hdr)){
-		RTE_LOG(WARNING, USER5, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct udp_hdr)(%lu)\n",
-				iplen, (int)ip_hdr_offset, sizeof(struct udp_hdr));
+		//RTE_LOG(WARNING, USER5, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct udp_hdr)(%lu)\n",
+		//		iplen, (int)ip_hdr_offset, sizeof(struct udp_hdr));
 		return;
 	}
+
 	datalen = rte_be_to_cpu_16(udp_hdr->dgram_len);
 	if(iplen - (int32_t)ip_hdr_offset < datalen || datalen < (int32_t)sizeof(struct udp_hdr)){
 		RTE_LOG(WARNING, USER5, "datalen warning(%d)\n", datalen);
@@ -155,17 +212,19 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 	}
 
 	if(from_client){
-		sp = &cp->client;
+		snd = &cp->client;
+		rcv = &cp->server;
 	}else{
-		sp = &cp->server;
+		rcv = &cp->client;
+		snd = &cp->server;
 	}
 
 	// todo: seq / ack 
 	// todo: cp->state  cp->stream[0/1].state
 
 	// process 
-	sp->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
-	sp->pkts++;
+	snd->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
+	snd->pkts++;
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
 	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
 
@@ -176,10 +235,12 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 	 */
 
 	// update timer and lru
-	sp->last = tms;
+	snd->last = tms;
 	cp->last = tms;
 	TAILQ_REMOVE(&tbl->lru, cp, lru);
 	TAILQ_INSERT_TAIL(&tbl->lru, cp, lru);
+	notify(cp, rcv, tbl, tms, ((char *)udp_hdr) + sizeof(struct udp_hdr),
+			datalen - sizeof(struct udp_hdr));
 }
 
 struct app_protocol app_protocol_udp = {
