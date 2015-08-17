@@ -186,6 +186,29 @@ struct conn_tbl_stat {
 	uint64_t reuse_num;     /**< # of reuse (del/add) ops. */
 	uint64_t fail_total;    /**< total # of add failures. */
 	uint64_t fail_nospace;  /**< # of 'no space' add failures. */
+
+	uint64_t ICMP;
+	uint64_t IGMP;
+	uint64_t IPIP;
+	uint64_t EGP;
+	uint64_t PUP;
+	uint64_t IDP;
+	uint64_t TP;
+	uint64_t DCCP;
+	uint64_t IPV6;
+	uint64_t RSVP;
+	uint64_t GRE;
+	uint64_t ESP;
+	uint64_t AH;
+	uint64_t MTP;
+	uint64_t BEETPH;
+	uint64_t ENCAP;
+	uint64_t PIM;
+	uint64_t COMP;
+	uint64_t SCTP;
+	uint64_t UDPLITE;
+	uint64_t RAW;
+	uint64_t IPV4_UNKNOW;
 } __rte_cache_aligned;
 
 /** connection table */

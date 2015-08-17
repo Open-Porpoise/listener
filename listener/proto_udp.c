@@ -183,6 +183,8 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 			IPV4_IHL_MULTIPLIER;
 	udp_hdr = (struct udp_hdr *)((char *)ip_hdr + ip_hdr_offset);
 
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, iplen);
 
 	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct udp_hdr)){
 		//RTE_LOG(WARNING, USER5, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct udp_hdr)(%lu)\n",
@@ -225,8 +227,6 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 	// process 
 	snd->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
 	snd->pkts++;
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
 
 	/*
 	   if(cp->state == TCP_CLOSE){
