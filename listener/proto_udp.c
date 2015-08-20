@@ -14,6 +14,9 @@ static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 {
 	/* todo: reset conn counter */
 	memset(cp, 0, sizeof(*cp));
+	cp->req_time = -1;
+	cp->rsp_time = -1;
+	cp->conn_time = -1;
 	cp->last = tms;
 	cp->start = tms;
 	cp->pp = pp;
@@ -122,10 +125,6 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 			app_conn_tbl_del(tbl, stale);
 			free = stale;
 			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, reuse_num, 1);
-
-			pp->report_handle(tbl, stale, tms);
-			app_conn_tbl_del(tbl, stale);
-			free = stale;
 
 			/*
 			 * we found a free entry, check if we can use it.
