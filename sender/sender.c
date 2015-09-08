@@ -28,7 +28,7 @@ int main (int argc, char **argv) {
 	static rd_kafka_t *rk;
 	static int run = 1;
 	ip_entry *e;
-	char pbuf[BUFF_SIZE];
+	char pbuf[BUFF_SIZE], *p;
 	char *tpl = "{"
 		"\"protocol\":\"%s\","
 		"\"srcip\":\""NIPQUAD_FMT"\","
@@ -107,7 +107,7 @@ int main (int argc, char **argv) {
 	}
 
 	msg_cnt = 0;
-	ips = open_ips("ip.txt");
+	ips = open_ips("ip.txt", GEO_F_ALIAS);
 	if(ips == NULL){
 		exit(1);
 	}
@@ -121,6 +121,11 @@ int main (int argc, char **argv) {
 		}
 		msg_cnt++;
 
+#define ALIAS_FILTER(a, b, c, ptr)  \
+({                                  \
+	ptr = (char *)a; \
+	ptr[0] == b && ptr[1] == c ? &ptr[2] : &ptr[0]; \
+})
 
 		e = (ip_entry *)radix32tree_find(ips->tree, mbuf.u.sip);
 		msgsize = snprintf(pbuf, BUFF_SIZE, tpl, 
@@ -135,8 +140,8 @@ int main (int argc, char **argv) {
 				mbuf.u.tx_pkgs,
 				(char *)e->city,
 				(char *)e->country,
-				(char *)e->isp,
-				(char *)e->province,
+				ALIAS_FILTER(e->isp, 'i', '_', p),       //(char *)e->isp,
+				ALIAS_FILTER(e->province, 'p', '_', p),  //(char *)e->province,
 				mbuf.u.conn_time,
 				mbuf.u.req_time,
 				mbuf.u.rsp_time,
