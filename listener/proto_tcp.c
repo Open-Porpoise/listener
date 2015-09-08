@@ -694,6 +694,9 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 			IPV4_IHL_MULTIPLIER;
 	tcphdr = (struct tcphdr *)((char *)ip_hdr + ip_hdr_offset);
 
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, iplen);
+
 	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct tcphdr)){
 		//RTE_LOG(WARNING, USER3, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct tcphdr)(%d)\n",
 		//		iplen, (int)ip_hdr_offset, (int)sizeof(struct tcphdr));
@@ -873,10 +876,8 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 
 out:
 	// update timer and lru
-	snd->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
+	snd->bytes += iplen;
 	snd->pkts++;
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
 	snd->last = tms;
 	cp->last = tms;
 	TAILQ_REMOVE(&tbl->lru, cp, lru);

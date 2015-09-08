@@ -150,7 +150,7 @@ int main (int argc, char **argv) {
 				time(NULL));
 
 		//if((msg_cnt & 0xf) == 0xf){
-		//	printf("msg_cnt: %lu, msg: %s\n", msg_cnt, pbuf);
+			//printf("%s\n", pbuf);
 		//}
 
 		while (run && 

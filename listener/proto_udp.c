@@ -14,6 +14,9 @@ static void udp_conn_add(struct app_conn_tbl *tbl,  struct app_conn *cp,
 {
 	/* todo: reset conn counter */
 	memset(cp, 0, sizeof(*cp));
+	cp->req_time = -1;
+	cp->rsp_time = -1;
+	cp->conn_time = -1;
 	cp->last = tms;
 	cp->start = tms;
 	cp->pp = pp;
@@ -123,10 +126,6 @@ static struct app_conn * udp_conn_find(struct app_protocol *pp, struct rte_mbuf 
 			free = stale;
 			APP_CONN_TBL_STAT_UPDATE(&tbl->stat, reuse_num, 1);
 
-			pp->report_handle(tbl, stale, tms);
-			app_conn_tbl_del(tbl, stale);
-			free = stale;
-
 			/*
 			 * we found a free entry, check if we can use it.
 			 * If we run out of free entries in the table, then
@@ -183,6 +182,8 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 			IPV4_IHL_MULTIPLIER;
 	udp_hdr = (struct udp_hdr *)((char *)ip_hdr + ip_hdr_offset);
 
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
+	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, iplen);
 
 	if((uint32_t)iplen < ip_hdr_offset + sizeof(struct udp_hdr)){
 		//RTE_LOG(WARNING, USER5, "ipen(%d) < ip_hdr_offset(%d) + sizeof(struct udp_hdr)(%lu)\n",
@@ -225,8 +226,6 @@ static void udp_process_handle(struct app_protocol *pp, struct app_conn_tbl *tbl
 	// process 
 	snd->bytes += rte_be_to_cpu_16(ip_hdr->total_length);
 	snd->pkts++;
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_pkts, 1);
-	APP_CONN_TBL_STAT_UPDATE(&tbl->stat, proc_bytes, rte_be_to_cpu_16(ip_hdr->total_length));
 
 	/*
 	   if(cp->state == TCP_CLOSE){

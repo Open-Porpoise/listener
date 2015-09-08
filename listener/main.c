@@ -42,6 +42,8 @@ main(int argc, char **argv)
 
 	rte_set_log_level(RTE_LOG_DEBUG);
 	rte_set_log_type(RTE_LOGTYPE_USER1, 1);
+	rte_set_log_type(RTE_LOGTYPE_USER5, 0);
+	rte_set_log_type(RTE_LOGTYPE_USER3, 0);
 
 	/* Init EAL */
 	ret = rte_eal_init(argc, argv);
