@@ -124,7 +124,7 @@ int main (int argc, char **argv) {
 #define ALIAS_FILTER(a, b, c, ptr)  \
 ({                                  \
 	ptr = (char *)a; \
-	ptr[0] == b && ptr[1] == c ? &ptr[2] : &ptr[0]; \
+	ptr && ptr[0] == b && ptr[1] == c ? &ptr[2] : "-1"; \
 })
 
 		e = (ip_entry *)radix32tree_find(ips->tree, mbuf.u.sip);

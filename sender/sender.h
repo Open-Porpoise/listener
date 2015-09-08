@@ -13,7 +13,7 @@
 #include <netinet/in.h>
 
 //#define SND_BROKERS "10.106.201.44:21500,10.106.201.45:21500,10.106.201.46:21500"
-#define SND_BROKERS "lg-hadoop-log02.bj:21500,lg-hadoop-log07.bj:21500,lg-hadoop-log01.bj:21500,lg-miui-hd-log00.bj:21500,lg-miui-hd-log01.bj:21500,lg-hadoop-log03.bj:21500,lg-hadoop-log05.bj:21500,lg-hadoop-log06.bj:21500"
+#define SND_BROKERS "lg-hadoop-kafka01.bj:21500, lg-hadoop-kafka02.bj:21500,lg-hadoop-kafka03.bj:21500, lg-hadoop-kafka04.bj:21500, lg-hadoop-kafka05.bj:21500,lg-hadoop-kafka06.bj:21500, lg-hadoop-kafka07.bj:21500,lg-hadoop-log07.bj:21500"
 #define SND_TOPIC "uaq"
 #define SND_COMPRESSION "snappy" 
 #define SND_MSG_TYPE_UAQ 1
