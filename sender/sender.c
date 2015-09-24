@@ -53,6 +53,13 @@ int main (int argc, char **argv) {
 	size_t msgsize;
 	msg_uaq_t mbuf;
 
+	msg_cnt = 0;
+	ips = open_ips("ip.txt", GEO_F_ALIAS);
+	if(ips == NULL){
+		exit(1);
+	}
+
+
 	/* Kafka configuration */
 	conf = rd_kafka_conf_new();
 
@@ -98,20 +105,12 @@ int main (int argc, char **argv) {
 	/* Create topic */
 	rkt = rd_kafka_topic_new(rk, SND_TOPIC, topic_conf);
 
-	if (DEBUG)
-		rd_kafka_set_log_level(rk, 7);
+	rd_kafka_set_log_level(rk, 7);
 
 	if ((msgid = msgget(SND_MSG_KEY, IPC_CREAT|0666)) < 0){
 		fprintf(stderr, "msgget error \n");
 		exit(1);
 	}
-
-	msg_cnt = 0;
-	ips = open_ips("ip.txt", GEO_F_ALIAS);
-	if(ips == NULL){
-		exit(1);
-	}
-
 	while (run) {
 		/* Send/Produce message. */
 
@@ -130,8 +129,8 @@ int main (int argc, char **argv) {
 		e = (ip_entry *)radix32tree_find(ips->tree, mbuf.u.sip);
 		msgsize = snprintf(pbuf, BUFF_SIZE, tpl, 
 				mbuf.u.protocol == IPPROTO_TCP ? "TCP" : "UDP",
-				NIPQUAD(mbuf.u.sip), 
-				NIPQUAD(mbuf.u.dip), 
+				HIPQUAD(mbuf.u.sip), 
+				HIPQUAD(mbuf.u.dip), 
 				mbuf.u.sport, 
 				mbuf.u.dport,
 				mbuf.u.rx_bytes,
@@ -149,9 +148,11 @@ int main (int argc, char **argv) {
 				mbuf.u.round_trip_time,
 				time(NULL));
 
-		//if((msg_cnt & 0xf) == 0xf){
-			//printf("%s\n", pbuf);
-		//}
+#ifdef _DEBUG
+		if((msg_cnt & 0xfff) == 0xfff){
+			printf("%s\n", pbuf);
+		}
+#endif
 
 		while (run && 
 				rd_kafka_produce(rkt, partition, RD_KAFKA_MSG_F_COPY, 
@@ -176,9 +177,7 @@ int main (int argc, char **argv) {
 		rd_kafka_poll(rk, 0);
 	}
 
-#ifdef DEBUG
-		rd_kafka_dump(stdout, rk);
-#endif
+	rd_kafka_dump(stdout, rk);
 
 	/* Wait for messages to be delivered */
 	while (run && rd_kafka_poll(rk, 1000) != -1)
@@ -187,8 +186,7 @@ int main (int argc, char **argv) {
 	int outq = rd_kafka_outq_len(rk);
 	printf("%% %i messages in outq\n", outq);
 
-	if (DEBUG)
-		rd_kafka_dump(stdout, rk);
+	rd_kafka_dump(stdout, rk);
 
 	/* Destroy topic */
 	rd_kafka_topic_destroy(rkt);

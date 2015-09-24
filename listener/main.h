@@ -59,7 +59,7 @@
 #define	MIN_CONN_NUM	1
 
 #ifdef DEBUG
-#define	DEF_CONN_NUM	0x800
+#define	DEF_CONN_NUM	0x80
 #else
 #define	DEF_CONN_NUM	0x80000
 #endif

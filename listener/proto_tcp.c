@@ -610,7 +610,7 @@ static struct app_conn * tcp_conn_find(struct app_protocol *pp,
 			if ((tcphdr->th_flags & TH_SYN) && 
 					!(tcphdr->th_flags & TH_ACK) &&
 					!(tcphdr->th_flags & TH_RST) &&
-					radix32tree_find(app.ip_list, rte_be_to_cpu_32(key->addr[1])) &&
+					radix32tree_find(app.ip_list, rte_be_to_cpu_32(key->addr[1])) > 0 &&
 					key->src_dst_addr) {
 				tcp_conn_add(tbl,  free, key, tms, pp, tcphdr);
 				cp = free;

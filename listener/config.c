@@ -592,15 +592,17 @@ static int parse_arg_ip_list(const char *arg) {
 	}
 	app.ip_list = radix_tree_create();
 	while (fgets(line, sizeof(line), fp)) {
+		if(line[0] == '#')
+			continue;
 		num = sscanf(line, "%[^/\n]/%d", network, &prefix);
 		if(num == 1){
 			net = (uint32_t)inet_addr(network);
-			if(radix_insert(app.ip_list, net, 32, 1)){
+			if(radix_insert(app.ip_list, rte_be_to_cpu_32(net), 32, 1)){
 				return -3;
 			}
 		}else if(num == 2){
 			net = (uint32_t)inet_addr(network);
-			if(radix_insert(app.ip_list, net, prefix, 1)){
+			if(radix_insert(app.ip_list, rte_be_to_cpu_32(net), prefix, 1)){
 				return -3;
 			}
 		}else{
