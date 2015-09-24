@@ -14,6 +14,7 @@
 
 
 #define BUFF_SIZE 1024
+#define _DEBUG
 
 static int msgid;
 static uint64_t msg_cnt;
