@@ -48,7 +48,7 @@ int main (int argc, char **argv) {
 		"\"thc\":\"%d\","
 		"\"thr\":\"%d\","
 		"\"code\":\"%d\","
-		"\"rrt\":\"%d\","
+		"\"rtt\":\"%d\","
 		"\"time\":%u"
 		"}";
 	size_t msgsize;
