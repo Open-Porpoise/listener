@@ -104,7 +104,7 @@ static void add2buf(struct app_conn_stream * rcv, char *data, int datalen)
 	rcv->count += datalen;
 }
 
-
+/*
 static uint32_t ms_diff(uint64_t a, uint64_t b){
 	if(b > a){
 		return ((b - a) * 1000)/rte_get_tsc_hz();
@@ -112,6 +112,27 @@ static uint32_t ms_diff(uint64_t a, uint64_t b){
 		return 0;
 	}
 }
+*/
+
+static uint32_t us_diff(uint64_t a, uint64_t b){
+	if(b > a){
+		return ((b - a) * 1000000)/rte_get_tsc_hz();
+	}else{
+		return 0;
+	}
+}
+
+/*
+static uint32_t ns_diff(uint64_t a, uint64_t b){
+	if(b > a){
+		return ((b - a) * 1000000000)/rte_get_tsc_hz();
+	}else{
+		return 0;
+	}
+}
+*/
+
+
 
 static void event(struct app_conn *cp, char mask, 
 		struct app_conn_tbl *tbl, uint64_t tms){
@@ -132,7 +153,7 @@ static void event(struct app_conn *cp, char mask,
 		//LOG_ADDR(->);
 		//RTE_LOG(DEBUG, USER2, "state: CONN_S_JUST_EST\n");
 		//cp->conn_time = tms;
-		cp->conn_time = ms_diff(cp->start, tms);
+		cp->conn_time = us_diff(cp->start, tms);
 		return;
 	}
 	if (cp->state == CONN_S_CLOSE){
@@ -177,7 +198,7 @@ static void event(struct app_conn *cp, char mask,
 						//RTE_LOG(DEBUG, USER5, "cc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
 						//	cp->client.offset, cp->server.offset,
 						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->client.data);
-						cp->rsp_time = ms_diff(cp->start, tms) - cp->req_time;
+						cp->rsp_time = us_diff(cp->start, tms) - cp->req_time;
 						resp = (uint32_t *)cp->client.data;
 						if(resp[0] == *(uint32_t *)"HTTP" && 
 								(resp[1] == *(uint32_t *)"/0.9" || 
@@ -202,7 +223,7 @@ static void event(struct app_conn *cp, char mask,
 						//RTE_LOG(DEBUG, USER5, "sc offset:%u,%u tms:%lu,%lu count:%d %.10s\n", 
 						//	cp->client.offset, cp->server.offset,
 						//	cp->req_time, cp->rsp_time, cp->server.count_new, cp->server.data);
-						cp->req_time = ms_diff(cp->start, tms) - cp->conn_time;
+						cp->req_time = us_diff(cp->start, tms) - cp->conn_time;
 					}
 				}
 				break;
@@ -836,7 +857,7 @@ static void tcp_process_handle( struct app_protocol *pp, struct app_conn_tbl *tb
 		if(from_client){
 			if(after(tcphdr->th_ack, rcv->seq - 1)){
 				if(rcv->seq_tms){
-					cp->round_trip_time_sum += ms_diff(rcv->seq_tms, tms);
+					cp->round_trip_time_sum += us_diff(rcv->seq_tms, tms);
 					cp->round_trip_time_count++;
 					rcv->seq_tms = 0;
 				}
